@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -92,7 +93,7 @@ export default function HomePage() {
         onSave={handleAddRecipe}
       />
       <footer className="text-center py-6 border-t border-border text-sm text-muted-foreground">
-        <p>&copy; {new Date().getFullYear()} Recipe Rack. Happy Cooking!</p>
+        <p>&copy; {hasMounted ? new Date().getFullYear() : '...'} Recipe Rack. Happy Cooking!</p>
       </footer>
     </div>
   );

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,7 +17,7 @@ export function RecipeCard({ recipe, onDelete }: RecipeCardProps) {
     <Card className="flex flex-col h-full shadow-lg hover:shadow-xl transition-shadow duration-300 rounded-lg overflow-hidden">
       <CardHeader className="p-6 bg-card">
         <div className="flex justify-between items-start">
-          <CardTitle className="text-2xl font-bold text-primary-foreground tracking-tight">{recipe.title}</CardTitle>
+          <CardTitle className="text-2xl font-bold tracking-tight">{recipe.title}</CardTitle>
           {recipe.cuisine && <Badge variant="secondary" className="ml-2 shrink-0">{recipe.cuisine}</Badge>}
         </div>
       </CardHeader>

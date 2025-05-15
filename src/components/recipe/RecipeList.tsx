@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { Recipe } from '@/lib/types';
@@ -9,13 +10,9 @@ interface RecipeListProps {
 }
 
 export function RecipeList({ recipes, onDeleteRecipe }: RecipeListProps) {
-  if (recipes.length === 0) {
-    return (
-      <div className="text-center py-10">
-        <p className="text-xl text-muted-foreground">No recipes yet. Add your first one!</p>
-      </div>
-    );
-  }
+  // The parent component (HomePage) already handles the empty state for recipes.
+  // This component will only be rendered when recipes.length > 0.
+  // Thus, the original empty check here was redundant.
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4 md:p-8">
