@@ -21,7 +21,7 @@ const ExtractRecipeFromImageInputSchema = z.object({
 export type ExtractRecipeFromImageInput = z.infer<typeof ExtractRecipeFromImageInputSchema>;
 
 const ExtractedIngredientSchema = z.object({
-  id: z.string().uuid().optional().describe("A unique identifier for the ingredient, if available or generated."),
+  id: z.string().optional().describe("A unique identifier for the ingredient, if available or extracted. If not found, this can be omitted."),
   name: z.string().describe('The name of the ingredient. Use "" if not found/unclear.'),
   quantity: z.string().describe('The quantity or amount of the ingredient. Use "" if not found/unclear.'),
 });
@@ -55,7 +55,7 @@ Respond with a JSON object adhering *strictly* to the schema provided.
 
 Detailed Extraction Guidelines:
 - **title**: The main title of the recipe. If not found or illegible, use "".
-- **ingredients**: An array of objects. Each object *must* contain a "name" (string) and a "quantity" (string).
+- **ingredients**: An array of objects. Each object *must* contain a "name" (string) and "quantity" (string) field. The "id" field is optional and should only be included if an identifier is explicitly present in the source for an ingredient; otherwise, omit it.
     - If no ingredients list is clearly identifiable, or if the items are not presented with quantities, provide an empty array: [].
     - If an individual ingredient's name or quantity is unclear, use "" for that specific field within its object.
 - **instructions**: An array of strings. Each string represents a single, complete step of the recipe.
