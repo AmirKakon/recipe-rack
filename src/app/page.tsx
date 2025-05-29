@@ -209,8 +209,8 @@ export default function HomePage() {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Header onAddRecipeClick={handleOpenAddForm} />
-      <main className="flex-grow container mx-auto px-0 sm:px-4 py-8">
-        <div className="mb-6 px-4 md:px-0">
+      <main className="flex-grow container mx-auto px-4 py-8">
+        <div className="mb-6">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <Input
@@ -225,7 +225,7 @@ export default function HomePage() {
         </div>
 
         {isLoading && recipes.length === 0 && !errorLoading && (
-           <div className="space-y-4 p-4 md:p-0">
+           <div className="space-y-4 py-4">
             {[1, 2, 3, 4, 5].map(i => (
               <div key={i} className="bg-card rounded-lg shadow-md p-4 animate-pulse">
                 <div className="h-6 bg-muted rounded w-full mb-2"></div>
@@ -241,7 +241,7 @@ export default function HomePage() {
           </div>
         )}
         {!isLoading && errorLoading && (
-          <div className="flex flex-col items-center justify-center text-center py-20 bg-card rounded-lg shadow-md m-4 md:m-0">
+          <div className="flex flex-col items-center justify-center text-center py-20 bg-card rounded-lg shadow-md">
             <ServerCrash size={64} className="text-destructive mb-6" strokeWidth={1.5} />
             <h2 className="text-3xl font-semibold text-destructive mb-3">Oops! Something went wrong.</h2>
             <p className="text-lg text-muted-foreground mb-8 max-w-md">
@@ -253,7 +253,7 @@ export default function HomePage() {
           </div>
         )}
         {!isLoading && !errorLoading && filteredRecipes.length === 0 && recipes.length > 0 && searchTerm && (
-          <div className="flex flex-col items-center justify-center text-center py-20 bg-card rounded-lg shadow-md m-4 md:m-0">
+          <div className="flex flex-col items-center justify-center text-center py-20 bg-card rounded-lg shadow-md">
             <Search size={64} className="text-primary mb-6" strokeWidth={1.5} />
             <h2 className="text-3xl font-semibold text-foreground mb-3">No Recipes Found</h2>
             <p className="text-lg text-muted-foreground mb-8 max-w-md">
@@ -265,7 +265,7 @@ export default function HomePage() {
           </div>
         )}
         {!isLoading && !errorLoading && recipes.length === 0 && !searchTerm && (
-          <div className="flex flex-col items-center justify-center text-center py-20 bg-card rounded-lg shadow-md m-4 md:m-0">
+          <div className="flex flex-col items-center justify-center text-center py-20 bg-card rounded-lg shadow-md">
             <CookingPot size={64} className="text-primary mb-6" strokeWidth={1.5} />
             <h2 className="text-3xl font-semibold text-foreground mb-3">Your Recipe Rack is Empty!</h2>
             <p className="text-lg text-muted-foreground mb-8 max-w-md">
