@@ -13,6 +13,13 @@ interface RecipeCardProps {
 }
 
 export function RecipeCard({ recipe, onDelete }: RecipeCardProps) {
+  // Ensure instructions are always an array to handle old data formats
+  const instructionsArray = Array.isArray(recipe.instructions)
+    ? recipe.instructions
+    : typeof recipe.instructions === 'string' && recipe.instructions.trim() !== ''
+    ? [recipe.instructions] // Wrap old string in an array
+    : [];
+
   return (
     <Card className="flex flex-col h-full shadow-lg hover:shadow-xl transition-shadow duration-300 rounded-lg overflow-hidden">
       <CardHeader className="p-6 bg-card">
@@ -34,9 +41,9 @@ export function RecipeCard({ recipe, onDelete }: RecipeCardProps) {
         </div>
         <div className="mt-4">
           <h3 className="text-lg font-semibold mb-2 text-foreground">Instructions:</h3>
-          {recipe.instructions && recipe.instructions.length > 0 ? (
+          {instructionsArray.length > 0 ? (
             <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
-              {recipe.instructions.map((step, index) => (
+              {instructionsArray.map((step, index) => (
                 <li key={index} className="leading-relaxed whitespace-pre-wrap">
                   {step}
                 </li>
