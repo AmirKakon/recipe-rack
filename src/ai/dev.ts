@@ -4,3 +4,5 @@ config();
 
 import '@/ai/flows/suggest-recipe-name.ts';
 import '@/ai/flows/extract-recipe-from-image-flow.ts';
+import '@/ai/flows/suggest-recipe-details-flow.ts';
+

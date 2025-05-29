@@ -19,8 +19,9 @@ import type { RecipeFormData } from '@/lib/schemas';
 import { recipeFormSchema } from '@/lib/schemas';
 import { suggestRecipeName } from '@/ai/flows/suggest-recipe-name';
 import { extractRecipeFromImage } from '@/ai/flows/extract-recipe-from-image-flow.ts';
+import { suggestRecipeDetails } from '@/ai/flows/suggest-recipe-details-flow'; // New import
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Sparkles, Trash2, ArrowUp, ArrowDown, UploadCloud, ScanEye } from 'lucide-react';
+import { Loader2, PlusCircle, Sparkles, Trash2, ArrowUp, ArrowDown, ScanEye, Wand2 } from 'lucide-react'; // Added Wand2
 import { useEffect, useState, useRef } from 'react';
 import type { Recipe } from '@/lib/types';
 import Image from 'next/image';
@@ -64,11 +65,23 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
   const [isSuggestingName, setIsSuggestingName] = useState(false);
   const [suggestedName, setSuggestedName] = useState('');
 
+  const [isSuggestingDetails, setIsSuggestingDetails] = useState(false);
+  const [suggestedPrepTime, setSuggestedPrepTime] = useState('');
+  const [suggestedCookTime, setSuggestedCookTime] = useState('');
+  const [suggestedServingSize, setSuggestedServingSize] = useState('');
+
   const [isScanDialogValidOpen, setIsScanDialogValidOpen] = useState(false);
   const [isScanningRecipe, setIsScanningRecipe] = useState(false);
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
   const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const resetSuggestionStates = () => {
+    setSuggestedName('');
+    setSuggestedPrepTime('');
+    setSuggestedCookTime('');
+    setSuggestedServingSize('');
+  };
 
   const resetScanImageState = () => {
     setSelectedImageFile(null);
@@ -81,7 +94,8 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
   useEffect(() => {
     if (isOpen) {
       resetScanImageState();
-      setIsScanDialogValidOpen(false); // Ensure scan dialog is closed when main form opens
+      resetSuggestionStates();
+      setIsScanDialogValidOpen(false); 
 
       if (recipeToEdit) {
         const instructionsArray = Array.isArray(recipeToEdit.instructions)
@@ -110,10 +124,8 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
           cookTime: recipeToEdit.cookTime || '',
           servingSize: recipeToEdit.servingSize || '',
         });
-        setSuggestedName('');
       } else {
         form.reset(defaultFormValues);
-        setSuggestedName('');
       }
     }
   }, [isOpen, recipeToEdit, form]);
@@ -176,6 +188,80 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
     }
   };
 
+  const handleSuggestDetails = async () => {
+    const title = form.getValues('title');
+    const ingredientsValue = form.getValues('ingredients');
+    const instructionsValue = form.getValues('instructions');
+
+    if (!title.trim()) {
+      toast({ title: 'Missing Title', description: 'Please provide a title for the recipe.', variant: 'destructive' });
+      return;
+    }
+    if (!ingredientsValue || ingredientsValue.length === 0 || ingredientsValue.every(ing => !ing.name.trim())) {
+      toast({ title: 'Missing Ingredients', description: 'Please add some ingredients to suggest details.', variant: 'destructive' });
+      return;
+    }
+    if (!instructionsValue || instructionsValue.length === 0 || instructionsValue.every(step => !step.trim())) {
+      toast({ title: 'Missing Instructions', description: 'Please add some instructions to suggest details.', variant: 'destructive' });
+      return;
+    }
+
+    setIsSuggestingDetails(true);
+    setSuggestedPrepTime('');
+    setSuggestedCookTime('');
+    setSuggestedServingSize('');
+
+    try {
+      const ingredientsString = ingredientsValue.map(ing => ing.name).filter(name => name.trim()).join(', ');
+      const instructionsString = instructionsValue.filter(step => step.trim()).join('\n');
+
+      if (!ingredientsString) {
+        toast({ title: 'Missing Ingredients', description: 'Please ensure ingredients have names.', variant: 'destructive'});
+        setIsSuggestingDetails(false);
+        return;
+      }
+      if (!instructionsString) {
+         toast({ title: 'Missing Instructions', description: 'Please ensure instructions are not empty.', variant: 'destructive'});
+        setIsSuggestingDetails(false);
+        return;
+      }
+
+      const result = await suggestRecipeDetails({ title, ingredients: ingredientsString, instructions: instructionsString });
+      
+      setSuggestedPrepTime(result.suggestedPrepTime);
+      setSuggestedCookTime(result.suggestedCookTime);
+      setSuggestedServingSize(result.suggestedServingSize);
+
+      toast({
+        title: 'Details Suggested!',
+        description: 'AI has provided suggestions for prep time, cook time, and serving size.',
+      });
+    } catch (error) {
+      console.error('Error suggesting recipe details:', error);
+      toast({
+        title: 'Suggestion Error',
+        description: 'Failed to suggest recipe details. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSuggestingDetails(false);
+    }
+  };
+
+  const handleUseSuggestedPrepTime = () => {
+    if (suggestedPrepTime) form.setValue('prepTime', suggestedPrepTime);
+    setSuggestedPrepTime('');
+  };
+  const handleUseSuggestedCookTime = () => {
+    if (suggestedCookTime) form.setValue('cookTime', suggestedCookTime);
+    setSuggestedCookTime('');
+  };
+  const handleUseSuggestedServingSize = () => {
+    if (suggestedServingSize) form.setValue('servingSize', suggestedServingSize);
+    setSuggestedServingSize('');
+  };
+
+
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -224,8 +310,8 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
         title: 'Recipe Scanned!',
         description: 'Recipe details have been pre-filled. Please review and edit as needed.',
       });
-      setIsScanDialogValidOpen(false); // Close scan dialog on success
-      resetScanImageState(); // Clear image selection
+      setIsScanDialogValidOpen(false); 
+      resetScanImageState(); 
     } catch (error) {
       console.error('Error scanning recipe image:', error);
       toast({
@@ -239,17 +325,20 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
   };
   
   const handleCloseMainDialog = () => {
-    if (isSaving) return; // Prevent closing if main form is saving
+    if (isSaving) return; 
     resetScanImageState();
+    resetSuggestionStates();
     setIsScanDialogValidOpen(false);
     onClose(); 
   }
 
   const handleCloseScanDialog = () => {
-    if (isScanningRecipe) return; // Prevent closing if scan is in progress
+    if (isScanningRecipe) return; 
     resetScanImageState();
     setIsScanDialogValidOpen(false);
   }
+
+  const commonDisabledProps = isSaving || isSuggestingName || isScanningRecipe || isScanDialogValidOpen || isSuggestingDetails;
 
   return (
     <>
@@ -266,7 +355,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
           
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <fieldset disabled={isSaving || isScanningRecipe} className="space-y-6">
+              <fieldset disabled={isSaving || isScanningRecipe || isSuggestingDetails} className="space-y-6">
                 <FormField
                   control={form.control}
                   name="title"
@@ -285,7 +374,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                     <Button
                       type="button"
                       onClick={handleSuggestName}
-                      disabled={isSuggestingName || isSaving || isScanningRecipe || isScanDialogValidOpen}
+                      disabled={commonDisabledProps}
                       variant="default" 
                       className="w-full sm:w-auto"
                     >
@@ -294,23 +383,23 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                       ) : (
                         <Sparkles className="mr-2 h-4 w-4" />
                       )}
-                      Suggest Title with AI
+                      Suggest Title
                     </Button>
                     <Button
                       type="button"
                       onClick={() => setIsScanDialogValidOpen(true)}
-                      disabled={isSaving || isSuggestingName || isScanningRecipe || isScanDialogValidOpen}
+                      disabled={commonDisabledProps}
                       variant="default" 
                       className="w-full sm:w-auto"
                     >
                       <ScanEye className="mr-2 h-4 w-4" />
-                      Scan Recipe from Image
+                      Scan Recipe
                     </Button>
                   </div>
                   {suggestedName && (
                     <div className="p-3 bg-accent/10 border border-accent/30 rounded-md flex items-center justify-between">
                       <p className="text-sm">Suggested: <span className="font-semibold">{suggestedName}</span></p>
-                      <Button type="button" size="sm" onClick={handleUseSuggestedName} variant="default" disabled={isSaving || isSuggestingName || isScanningRecipe || isScanDialogValidOpen}>Use this name</Button>
+                      <Button type="button" size="sm" onClick={handleUseSuggestedName} variant="default" disabled={commonDisabledProps}>Use this name</Button>
                     </div>
                   )}
                 </div>
@@ -328,6 +417,24 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                     </FormItem>
                   )}
                 />
+                
+                <div className="space-y-1 my-4">
+                   <Button
+                        type="button"
+                        onClick={handleSuggestDetails}
+                        disabled={commonDisabledProps}
+                        variant="default"
+                        className="w-full sm:w-auto"
+                    >
+                        {isSuggestingDetails ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                            <Wand2 className="mr-2 h-4 w-4" />
+                        )}
+                        Suggest Times & Servings
+                    </Button>
+                </div>
+
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <FormField
@@ -339,6 +446,12 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                         <FormControl>
                           <Input placeholder="e.g., 20 mins" {...field} className="text-base py-2 px-3"/>
                         </FormControl>
+                        {suggestedPrepTime && (
+                          <div className="p-2 mt-1 bg-accent/10 border border-accent/30 rounded-md flex items-center justify-between text-xs">
+                            <span>Suggest: {suggestedPrepTime}</span>
+                            <Button type="button" size="xs" onClick={handleUseSuggestedPrepTime} variant="outline" className="py-0.5 px-1.5 h-auto" disabled={commonDisabledProps}>Use</Button>
+                          </div>
+                        )}
                         <FormMessage />
                       </FormItem>
                     )}
@@ -352,6 +465,12 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                         <FormControl>
                           <Input placeholder="e.g., 45 mins" {...field} className="text-base py-2 px-3"/>
                         </FormControl>
+                        {suggestedCookTime && (
+                          <div className="p-2 mt-1 bg-accent/10 border border-accent/30 rounded-md flex items-center justify-between text-xs">
+                            <span>Suggest: {suggestedCookTime}</span>
+                            <Button type="button" size="xs" onClick={handleUseSuggestedCookTime} variant="outline" className="py-0.5 px-1.5 h-auto" disabled={commonDisabledProps}>Use</Button>
+                          </div>
+                        )}
                         <FormMessage />
                       </FormItem>
                     )}
@@ -365,6 +484,12 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                         <FormControl>
                           <Input placeholder="e.g., 4 servings" {...field} className="text-base py-2 px-3"/>
                         </FormControl>
+                        {suggestedServingSize && (
+                          <div className="p-2 mt-1 bg-accent/10 border border-accent/30 rounded-md flex items-center justify-between text-xs">
+                            <span>Suggest: {suggestedServingSize}</span>
+                            <Button type="button" size="xs" onClick={handleUseSuggestedServingSize} variant="outline" className="py-0.5 px-1.5 h-auto" disabled={commonDisabledProps}>Use</Button>
+                          </div>
+                        )}
                         <FormMessage />
                       </FormItem>
                     )}
@@ -413,7 +538,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                         onClick={() => removeIngredient(index)}
                         className="text-muted-foreground hover:text-destructive" 
                         aria-label="Remove ingredient"
-                        disabled={isSaving || isScanningRecipe || isScanDialogValidOpen}
+                        disabled={commonDisabledProps}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -425,7 +550,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                     size="sm"
                     onClick={() => appendIngredient({ id: crypto.randomUUID(), name: '', quantity: '' })}
                     className="mt-2"
-                    disabled={isSaving || isScanningRecipe || isScanDialogValidOpen}
+                    disabled={commonDisabledProps}
                   >
                     <PlusCircle className="mr-2 h-4 w-4" /> Add Ingredient
                   </Button>
@@ -454,7 +579,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                           variant="ghost" 
                           size="icon"
                           onClick={() => swapInstruction(index, index - 1)}
-                          disabled={index === 0 || !!isSaving || !!isScanningRecipe || isScanDialogValidOpen}
+                          disabled={index === 0 || commonDisabledProps}
                           className="text-muted-foreground hover:text-primary h-7 w-7"
                           aria-label={`Move instruction step ${index + 1} up`}
                         >
@@ -467,7 +592,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                           onClick={() => removeInstruction(index)}
                           className="text-muted-foreground hover:text-destructive h-7 w-7" 
                           aria-label={`Remove instruction step ${index + 1}`}
-                          disabled={isSaving || isScanningRecipe || isScanDialogValidOpen}
+                          disabled={commonDisabledProps}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -476,7 +601,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                           variant="ghost" 
                           size="icon"
                           onClick={() => swapInstruction(index, index + 1)}
-                          disabled={index === instructionFields.length - 1 || !!isSaving || !!isScanningRecipe || isScanDialogValidOpen}
+                          disabled={index === instructionFields.length - 1 || commonDisabledProps}
                           className="text-muted-foreground hover:text-primary h-7 w-7"
                           aria-label={`Move instruction step ${index + 1} down`}
                         >
@@ -491,7 +616,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                     size="sm"
                     onClick={() => appendInstruction('')}
                     className="mt-2"
-                    disabled={isSaving || isScanningRecipe || isScanDialogValidOpen}
+                    disabled={commonDisabledProps}
                   >
                     <PlusCircle className="mr-2 h-4 w-4" /> Add Instruction Step
                   </Button>
@@ -502,7 +627,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                 <Button type="button" variant="default" onClick={handleCloseMainDialog} className="w-full sm:w-auto" disabled={isSaving || isScanningRecipe}>
                   Cancel
                 </Button>
-                <Button type="submit" variant="default" className="w-full sm:w-auto mb-3 sm:mb-0" disabled={isSaving || isSuggestingName || isScanningRecipe || isScanDialogValidOpen}>
+                <Button type="submit" variant="default" className="w-full sm:w-auto mb-3 sm:mb-0" disabled={commonDisabledProps}>
                   {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : recipeToEdit ? 'Save Changes' : 'Save Recipe'}
                 </Button>
               </DialogFooter>
