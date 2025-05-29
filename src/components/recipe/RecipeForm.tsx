@@ -331,6 +331,19 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                 )}
               </div>
               
+              <FormField
+                control={form.control}
+                name="cuisine"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-base">Cuisine Tags (comma-separated)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g., Italian, Quick, Spicy" {...field} className="text-base py-2 px-3"/>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               <div>
                 <FormLabel className="text-base">Ingredients</FormLabel>
@@ -391,20 +404,6 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                   <PlusCircle className="mr-2 h-4 w-4" /> Add Ingredient
                 </Button>
               </div>
-
-              <FormField
-                control={form.control}
-                name="cuisine"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-base">Cuisine Tags (comma-separated)</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., Italian, Quick, Spicy" {...field} className="text-base py-2 px-3"/>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
               
               <div>
                 <FormLabel className="text-base">Instructions</FormLabel>
