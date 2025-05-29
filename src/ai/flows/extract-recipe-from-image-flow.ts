@@ -28,8 +28,8 @@ const ExtractedIngredientSchema = z.object({
 
 const ExtractRecipeFromImageOutputSchema = z.object({
   title: z.string().optional().describe('The extracted title of the recipe.'),
-  ingredients: z.array(ExtractedIngredientSchema).optional().describe('A list of extracted ingredients with their names and quantities.'),
-  instructions: z.array(z.string()).optional().describe('A list of extracted instruction steps.'),
+  ingredients: z.array(ExtractedIngredientSchema).optional().describe("A list of extracted ingredients. Each ingredient in the array should be an object with a 'name' (string) and a 'quantity' (string) property."),
+  instructions: z.array(z.string()).optional().describe('A list of extracted instruction steps. Each step should be a string element in the array.'),
   cuisine: z.string().optional().describe('Comma-separated cuisine tags suggested for the recipe.'),
 });
 export type ExtractRecipeFromImageOutput = z.infer<typeof ExtractRecipeFromImageOutputSchema>;
@@ -45,11 +45,11 @@ const prompt = ai.definePrompt({
   prompt: `You are an expert recipe analyst. Analyze the provided image of a recipe page or dish.
 Extract the following information:
 1.  **Title**: The main title of the recipe.
-2.  **Ingredients**: A list of ingredients. For each ingredient, provide its name and quantity.
+2.  **Ingredients**: A list of ingredients. For each ingredient, provide its name and quantity. Ensure ingredients are structured as an array of objects, where each object has a "name" and "quantity" field.
 3.  **Instructions**: A list of step-by-step cooking instructions. Each step should be a separate string in an array.
 4.  **Cuisine**: Suggest 1-3 relevant cuisine tags for this recipe, comma-separated (e.g., "Italian, Quick, Dinner").
 
-Prioritize accuracy. If some information is not clearly visible or inferable from the image, omit it from the output or provide an empty field where appropriate.
+Prioritize accuracy. If some information is not clearly visible or inferable from the image, omit it from the output or provide an empty field/array where appropriate.
 
 Image to analyze:
 {{media url=imageDataUri}}`,
@@ -68,3 +68,4 @@ const extractRecipeFromImageFlow = ai.defineFlow(
     return output || {}; // Ensure we always return an object, even if AI output is null/undefined
   }
 );
+
