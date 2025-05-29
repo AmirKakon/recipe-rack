@@ -447,7 +447,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                   <FormMessage>{form.formState.errors.instructions?.message || form.formState.errors.instructions?.root?.message}</FormMessage>
                 </div>
               </fieldset>
-              <DialogFooter className="pt-4 space-y-2 sm:space-y-0">
+              <DialogFooter className="pt-4 space-y-3 sm:space-y-0">
                 <Button type="button" variant="default" onClick={handleCloseMainDialog} className="mr-2" disabled={isSaving || isScanningRecipe}>
                   Cancel
                 </Button>
@@ -491,7 +491,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
               The AI will pre-fill the recipe form with the extracted information. You can review and edit it before saving.
             </p>
           </div>
-          <DialogFooter className="space-y-2 sm:space-y-0">
+          <DialogFooter className="space-y-3 sm:space-y-0">
             <Button type="button" variant="default" onClick={handleCloseScanDialog} className="mr-2" disabled={isScanningRecipe}>
               Cancel
             </Button>
