@@ -20,17 +20,16 @@ const ExtractRecipeFromImageInputSchema = z.object({
 });
 export type ExtractRecipeFromImageInput = z.infer<typeof ExtractRecipeFromImageInputSchema>;
 
-// Output schema designed to be mappable to RecipeFormData, with all fields optional
 const ExtractedIngredientSchema = z.object({
-  name: z.string().describe('The name of the ingredient.'),
-  quantity: z.string().describe('The quantity or amount of the ingredient.'),
+  name: z.string().describe('The name of the ingredient. Use "" if not found/unclear.'),
+  quantity: z.string().describe('The quantity or amount of the ingredient. Use "" if not found/unclear.'),
 });
 
 const ExtractRecipeFromImageOutputSchema = z.object({
-  title: z.string().optional().describe('The extracted title of the recipe.'),
-  ingredients: z.array(ExtractedIngredientSchema).optional().describe("A list of extracted ingredients. Each ingredient in the array should be an object with a 'name' (string) and a 'quantity' (string) property."),
-  instructions: z.array(z.string()).optional().describe('A list of extracted instruction steps. Each step should be a string element in the array.'),
-  cuisine: z.string().optional().describe('Comma-separated cuisine tags suggested for the recipe.'),
+  title: z.string().describe('The extracted title of the recipe. Use "" if not found/unclear.'),
+  ingredients: z.array(ExtractedIngredientSchema).describe("An array of extracted ingredient objects. Each object *must* have 'name' (string) and 'quantity' (string) fields. Provide an empty array [] if no ingredients are found or if they cannot be clearly identified as a list of items with quantities."),
+  instructions: z.array(z.string()).describe('An array of extracted instruction strings. Each string is a single step. Provide an empty array [] if no instructions are found or if they cannot be clearly identified as a sequence of steps.'),
+  cuisine: z.string().describe('A comma-separated string of 1-3 relevant cuisine tags. Use "" if not found/unclear.'),
 });
 export type ExtractRecipeFromImageOutput = z.infer<typeof ExtractRecipeFromImageOutputSchema>;
 
@@ -42,14 +41,23 @@ const prompt = ai.definePrompt({
   name: 'extractRecipeFromImagePrompt',
   input: {schema: ExtractRecipeFromImageInputSchema},
   output: {schema: ExtractRecipeFromImageOutputSchema},
-  prompt: `You are an expert recipe analyst. Analyze the provided image of a recipe page or dish.
-Extract the following information:
-1.  **Title**: The main title of the recipe.
-2.  **Ingredients**: A list of ingredients. For each ingredient, provide its name and quantity. Ensure ingredients are structured as an array of objects, where each object has a "name" and "quantity" field.
-3.  **Instructions**: A list of step-by-step cooking instructions. Each step should be a separate string in an array.
-4.  **Cuisine**: Suggest 1-3 relevant cuisine tags for this recipe, comma-separated (e.g., "Italian, Quick, Dinner").
+  prompt: `You are an expert recipe extraction AI. Analyze the provided image of a recipe.
+Your task is to extract the title, ingredients, instructions, and cuisine tags.
+Respond with a JSON object adhering *strictly* to the schema provided.
 
-Prioritize accuracy. If some information is not clearly visible or inferable from the image, omit it from the output or provide an empty field/array where appropriate.
+- If a piece of information (e.g., cuisine, or a specific ingredient's quantity) is not found or unclear from the image, use an empty string "" for that string field.
+- For arrays (ingredients, instructions): if no items are found or they are unclear, provide an empty array [].
+- Do not omit any fields from the main JSON structure. All specified fields (title, ingredients, instructions, cuisine) must be present.
+
+Detailed Extraction Guidelines:
+- **title**: The main title of the recipe. If not found or illegible, use "".
+- **ingredients**: An array of objects. Each object *must* contain a "name" (string) and a "quantity" (string).
+    - If no ingredients list is clearly identifiable, or if the items are not presented with quantities, provide an empty array: [].
+    - If an individual ingredient's name or quantity is unclear, use "" for that specific field within its object.
+- **instructions**: An array of strings. Each string represents a single, complete step of the recipe.
+    - If no step-by-step instructions are clearly identifiable, provide an empty array: [].
+    - Ensure each element in the array is a distinct step.
+- **cuisine**: A comma-separated string of 1-3 relevant cuisine tags (e.g., "Italian, Quick, Dinner"). If no cuisine is apparent or suggested, use "".
 
 Image to analyze:
 {{media url=imageDataUri}}`,
@@ -62,10 +70,16 @@ const extractRecipeFromImageFlow = ai.defineFlow(
     outputSchema: ExtractRecipeFromImageOutputSchema,
   },
   async input => {
-    // Using Gemini 2.0 Flash as it supports multimodal input
-    // and is generally faster for such tasks.
+    // Using Gemini 2.0 Flash as it supports multimodal input.
     const {output} = await prompt(input, { model: 'googleai/gemini-2.0-flash' });
-    return output || {}; // Ensure we always return an object, even if AI output is null/undefined
+    // If output is null/undefined (e.g. model error or schema validation failed upstream in prompt),
+    // return a default structure that matches the schema to prevent downstream errors.
+    return output || { 
+      title: '', 
+      ingredients: [], 
+      instructions: [], 
+      cuisine: '' 
+    };
   }
 );
 
