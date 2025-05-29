@@ -37,6 +37,9 @@ export default function HomePage() {
       ...recipe,
       cuisines: cuisinesArray,
       cuisine: undefined, // Ensure old cuisine field is not directly used
+      prepTime: recipe.prepTime || undefined,
+      cookTime: recipe.cookTime || undefined,
+      servingSize: recipe.servingSize || undefined,
     } as Recipe;
   };
   
@@ -99,7 +102,6 @@ export default function HomePage() {
       let response;
       let successMessage = '';
 
-      // Transform comma-separated cuisine string from form into an array of tags
       const cuisineTagsArray = recipeFormData.cuisine 
         ? recipeFormData.cuisine.split(',').map(tag => tag.trim()).filter(tag => tag) 
         : [];
@@ -111,8 +113,11 @@ export default function HomePage() {
           name: ing.name,
           quantity: ing.quantity,
         })),
-        cuisines: cuisineTagsArray, // Send as an array
-        cuisine: undefined, // Remove the original string field for backend
+        cuisines: cuisineTagsArray,
+        cuisine: undefined, 
+        prepTime: recipeFormData.prepTime || '',
+        cookTime: recipeFormData.cookTime || '',
+        servingSize: recipeFormData.servingSize || '',
       };
 
       if (recipeIdToUpdate) {
@@ -136,18 +141,18 @@ export default function HomePage() {
         throw new Error(errorData.message || `Failed to save recipe: ${response.statusText}`);
       }
 
-      await response.json(); // Assuming backend returns the created/updated recipe or status
+      await response.json(); 
       toast({
         title: recipeIdToUpdate ? 'Recipe Updated!' : 'Recipe Added!',
         description: successMessage,
       });
-      await fetchRecipes(); // Re-fetch to update the list
+      await fetchRecipes(); 
       handleCloseForm(); 
     } catch (error) {
       console.error("Error saving recipe:", error);
       toast({
         title: 'Save Error',
-        description: error instanceof Error ? error.message : "Could not save the recipe. The backend might need to be updated to support cuisine tags.",
+        description: error instanceof Error ? error.message : "Could not save the recipe. Ensure all fields are correct.",
         variant: 'destructive',
       });
     } finally {
@@ -297,3 +302,4 @@ export default function HomePage() {
     </div>
   );
 }
+

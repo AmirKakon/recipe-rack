@@ -17,6 +17,10 @@ export const recipeFormSchema = z.object({
   ).min(1, "At least one instruction step is required."),
   // 'cuisine' field in form will store comma-separated tags
   cuisine: z.string().max(200, "Cuisine tags string too long (max 200 characters)").optional(), 
+  prepTime: z.string().max(50, "Prep time description too long (e.g., '20 minutes')").optional(),
+  cookTime: z.string().max(50, "Cook time description too long (e.g., '45 minutes')").optional(),
+  servingSize: z.string().max(50, "Serving size description too long (e.g., '4 servings')").optional(),
 });
 
 export type RecipeFormData = z.infer<typeof recipeFormSchema>;
+

@@ -12,4 +12,8 @@ export interface Recipe {
   instructions: string[];
   cuisine?: string; // Kept for potential backward compatibility during fetch
   cuisines?: string[]; // New field for cuisine tags
+  prepTime?: string;
+  cookTime?: string;
+  servingSize?: string;
 }
+

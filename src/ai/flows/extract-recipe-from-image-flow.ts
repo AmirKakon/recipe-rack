@@ -30,6 +30,9 @@ const ExtractRecipeFromImageOutputSchema = z.object({
   ingredients: z.array(ExtractedIngredientSchema).describe("An array of extracted ingredient objects. Each object *must* have 'name' (string) and 'quantity' (string) fields. Provide an empty array [] if no ingredients are found or if they cannot be clearly identified as a list of items with quantities."),
   instructions: z.array(z.string()).describe('An array of extracted instruction strings. Each string is a single step. Provide an empty array [] if no instructions are found or if they cannot be clearly identified as a sequence of steps.'),
   cuisine: z.string().describe('A comma-separated string of 1-3 relevant cuisine tags. Use "" if not found/unclear.'),
+  prepTime: z.string().describe('The estimated preparation time (e.g., "20 minutes", "1 hour"). Use "" if not found/unclear.'),
+  cookTime: z.string().describe('The estimated cooking time (e.g., "45 minutes", "2 hours"). Use "" if not found/unclear.'),
+  servingSize: z.string().describe('The number of servings the recipe makes (e.g., "4 servings", "6-8 people"). Use "" if not found/unclear.'),
 });
 export type ExtractRecipeFromImageOutput = z.infer<typeof ExtractRecipeFromImageOutputSchema>;
 
@@ -42,12 +45,12 @@ const prompt = ai.definePrompt({
   input: {schema: ExtractRecipeFromImageInputSchema},
   output: {schema: ExtractRecipeFromImageOutputSchema},
   prompt: `You are an expert recipe extraction AI. Analyze the provided image of a recipe.
-Your task is to extract the title, ingredients, instructions, and cuisine tags.
+Your task is to extract the title, ingredients, instructions, cuisine tags, preparation time, cooking time, and serving size.
 Respond with a JSON object adhering *strictly* to the schema provided.
 
-- If a piece of information (e.g., cuisine, or a specific ingredient's quantity) is not found or unclear from the image, use an empty string "" for that string field.
+- If a piece of information (e.g., cuisine, prep time, or a specific ingredient's quantity) is not found or unclear from the image, use an empty string "" for that string field.
 - For arrays (ingredients, instructions): if no items are found or they are unclear, provide an empty array [].
-- Do not omit any fields from the main JSON structure. All specified fields (title, ingredients, instructions, cuisine) must be present.
+- Do not omit any fields from the main JSON structure. All specified fields (title, ingredients, instructions, cuisine, prepTime, cookTime, servingSize) must be present.
 
 Detailed Extraction Guidelines:
 - **title**: The main title of the recipe. If not found or illegible, use "".
@@ -58,6 +61,9 @@ Detailed Extraction Guidelines:
     - If no step-by-step instructions are clearly identifiable, provide an empty array: [].
     - Ensure each element in the array is a distinct step.
 - **cuisine**: A comma-separated string of 1-3 relevant cuisine tags (e.g., "Italian, Quick, Dinner"). If no cuisine is apparent or suggested, use "".
+- **prepTime**: The preparation time (e.g., "20 mins"). Use "" if not explicitly stated or unclear.
+- **cookTime**: The cooking time (e.g., "1 hr 15 mins"). Use "" if not explicitly stated or unclear.
+- **servingSize**: The number of servings (e.g., "Serves 4", "Makes 12 cookies"). Use "" if not explicitly stated or unclear.
 
 Image to analyze:
 {{media url=imageDataUri}}`,
@@ -78,7 +84,10 @@ const extractRecipeFromImageFlow = ai.defineFlow(
       title: '', 
       ingredients: [], 
       instructions: [], 
-      cuisine: '' 
+      cuisine: '',
+      prepTime: '',
+      cookTime: '',
+      servingSize: ''
     };
   }
 );

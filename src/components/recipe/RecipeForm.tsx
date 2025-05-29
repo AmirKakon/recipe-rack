@@ -39,6 +39,9 @@ const defaultFormValues: RecipeFormData = {
   ingredients: [{ name: '', quantity: '' }],
   instructions: [''],
   cuisine: '',
+  prepTime: '',
+  cookTime: '',
+  servingSize: '',
 };
 
 export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: RecipeFormProps) {
@@ -103,6 +106,9 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
           })),
           instructions: instructionsArray.length > 0 ? instructionsArray : [''],
           cuisine: cuisineString,
+          prepTime: recipeToEdit.prepTime || '',
+          cookTime: recipeToEdit.cookTime || '',
+          servingSize: recipeToEdit.servingSize || '',
         });
         setSuggestedName('');
       } else {
@@ -209,6 +215,9 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
         })),
         instructions: extractedData.instructions && extractedData.instructions.length > 0 ? extractedData.instructions : [''],
         cuisine: extractedData.cuisine || '',
+        prepTime: extractedData.prepTime || '',
+        cookTime: extractedData.cookTime || '',
+        servingSize: extractedData.servingSize || '',
       });
 
       toast({
@@ -272,21 +281,32 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                   )}
                 />
                 <div className="space-y-2">
-                   <Button
-                    type="button"
-                    onClick={handleSuggestName}
-                    disabled={isSuggestingName || isSaving || isScanningRecipe || isScanDialogValidOpen}
-                    variant="default" 
-                    className="w-full"
-                  >
-                    {isSuggestingName ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Sparkles className="mr-2 h-4 w-4" />
-                    )}
-                    Suggest Recipe Title with AI
-                  </Button>
-                  
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Button
+                      type="button"
+                      onClick={handleSuggestName}
+                      disabled={isSuggestingName || isSaving || isScanningRecipe || isScanDialogValidOpen}
+                      variant="default" 
+                      className="w-full sm:w-auto"
+                    >
+                      {isSuggestingName ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="mr-2 h-4 w-4" />
+                      )}
+                      Suggest Title with AI
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => setIsScanDialogValidOpen(true)}
+                      disabled={isSaving || isSuggestingName || isScanningRecipe || isScanDialogValidOpen}
+                      variant="default" 
+                      className="w-full sm:w-auto"
+                    >
+                      <ScanEye className="mr-2 h-4 w-4" />
+                      Scan Recipe from Image
+                    </Button>
+                  </div>
                   {suggestedName && (
                     <div className="p-3 bg-accent/10 border border-accent/30 rounded-md flex items-center justify-between">
                       <p className="text-sm">Suggested: <span className="font-semibold">{suggestedName}</span></p>
@@ -294,17 +314,6 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                     </div>
                   )}
                 </div>
-
-                <Button
-                  type="button"
-                  onClick={() => setIsScanDialogValidOpen(true)}
-                  disabled={isSaving || isSuggestingName || isScanningRecipe || isScanDialogValidOpen}
-                  variant="default" 
-                  className="w-full"
-                >
-                  <ScanEye className="mr-2 h-4 w-4" />
-                  Scan Recipe from Image with AI
-                </Button>
                 
                 <FormField
                   control={form.control}
@@ -319,6 +328,48 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                     </FormItem>
                   )}
                 />
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="prepTime"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-base">Prep Time</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g., 20 mins" {...field} className="text-base py-2 px-3"/>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="cookTime"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-base">Cook Time</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g., 45 mins" {...field} className="text-base py-2 px-3"/>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="servingSize"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-base">Serving Size</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g., 4 servings" {...field} className="text-base py-2 px-3"/>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
 
                 <div>
                   <FormLabel className="text-base">Ingredients</FormLabel>
@@ -447,7 +498,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                   <FormMessage>{form.formState.errors.instructions?.message || form.formState.errors.instructions?.root?.message}</FormMessage>
                 </div>
               </fieldset>
-              <DialogFooter className="pt-4">
+              <DialogFooter>
                 <Button type="button" variant="default" onClick={handleCloseMainDialog} className="w-full sm:w-auto" disabled={isSaving || isScanningRecipe}>
                   Cancel
                 </Button>
