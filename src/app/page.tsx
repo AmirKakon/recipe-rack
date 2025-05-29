@@ -119,7 +119,7 @@ export default function HomePage() {
         description: successMessage,
       });
       await fetchRecipes();
-      handleCloseForm(); // Close form on successful save
+      handleCloseForm(); 
     } catch (error) {
       console.error("Error saving recipe:", error);
       toast({
@@ -174,12 +174,14 @@ export default function HomePage() {
     if (!searchTerm) {
       return recipes;
     }
+    const lowercasedSearchTerm = searchTerm.toLowerCase();
     return recipes.filter(recipe =>
-      recipe.title.toLowerCase().includes(searchTerm.toLowerCase())
+      recipe.title.toLowerCase().includes(lowercasedSearchTerm) ||
+      (recipe.cuisine && recipe.cuisine.toLowerCase().includes(lowercasedSearchTerm))
     );
   }, [recipes, searchTerm]);
 
-  const currentYear = hasMounted ? new Date().getFullYear() : '...';
+  const currentYear = useMemo(() => (hasMounted ? new Date().getFullYear().toString() : '...'), [hasMounted]);
 
 
   return (
@@ -191,11 +193,11 @@ export default function HomePage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <Input
               type="text"
-              placeholder="Search recipes by title..."
+              placeholder="Search recipes by title or cuisine..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full max-w-md pl-10 shadow-sm"
-              aria-label="Search recipes by title"
+              aria-label="Search recipes by title or cuisine"
             />
           </div>
         </div>
@@ -203,11 +205,14 @@ export default function HomePage() {
         {isLoading && recipes.length === 0 && !errorLoading && (
            <div className="space-y-4 p-4 md:p-0">
             {[1, 2, 3, 4, 5].map(i => (
-              <div key={i} className="bg-card rounded-lg shadow-md p-4 animate-pulse flex justify-between items-center">
-                <div className="h-6 bg-muted rounded w-3/4"></div>
-                <div className="flex gap-2">
-                  <div className="h-8 w-16 bg-muted rounded"></div>
-                  <div className="h-8 w-16 bg-muted rounded"></div>
+              <div key={i} className="bg-card rounded-lg shadow-md p-4 animate-pulse">
+                <div className="h-6 bg-muted rounded w-full mb-2"></div>
+                <div className="flex justify-between items-center">
+                    <div className="h-5 bg-muted rounded w-1/4"></div>
+                    <div className="flex gap-2">
+                        <div className="h-8 w-16 bg-muted rounded"></div>
+                        <div className="h-8 w-16 bg-muted rounded"></div>
+                    </div>
                 </div>
               </div>
             ))}
@@ -230,7 +235,7 @@ export default function HomePage() {
             <Search size={64} className="text-primary mb-6" strokeWidth={1.5} />
             <h2 className="text-3xl font-semibold text-foreground mb-3">No Recipes Found</h2>
             <p className="text-lg text-muted-foreground mb-8 max-w-md">
-              No recipes match your search term "{searchTerm}". Try a different search.
+              No recipes match your search term "{searchTerm}" for title or cuisine. Try a different search.
             </p>
             <Button onClick={() => setSearchTerm('')} size="lg" variant="outline">
               Clear Search
