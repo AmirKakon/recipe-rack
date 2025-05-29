@@ -18,10 +18,13 @@ import { Textarea } from '@/components/ui/textarea';
 import type { RecipeFormData } from '@/lib/schemas';
 import { recipeFormSchema } from '@/lib/schemas';
 import { suggestRecipeName } from '@/ai/flows/suggest-recipe-name';
+import { extractRecipeFromImage } from '@/ai/flows/extract-recipe-from-image-flow.ts';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Sparkles, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Loader2, PlusCircle, Sparkles, Trash2, ArrowUp, ArrowDown, UploadCloud, ScanEye } from 'lucide-react';
+import { useEffect, useState, useRef } from 'react';
 import type { Recipe } from '@/lib/types';
+import Image from 'next/image'; // For image preview
+import { Label } from '@/components/ui/label'; // Ensure Label is imported
 
 interface RecipeFormProps {
   isOpen: boolean;
@@ -35,7 +38,7 @@ const defaultFormValues: RecipeFormData = {
   title: '',
   ingredients: [{ name: '', quantity: '' }],
   instructions: [''],
-  cuisine: '', // Will hold comma-separated tags
+  cuisine: '',
 };
 
 export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: RecipeFormProps) {
@@ -58,8 +61,20 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
   const [isSuggestingName, setIsSuggestingName] = useState(false);
   const [suggestedName, setSuggestedName] = useState('');
 
+  const [isScanningRecipe, setIsScanningRecipe] = useState(false);
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
+  const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+
   useEffect(() => {
     if (isOpen) {
+      setSelectedImageFile(null);
+      setSelectedImagePreview(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+
       if (recipeToEdit) {
         const instructionsArray = Array.isArray(recipeToEdit.instructions)
           ? recipeToEdit.instructions
@@ -77,7 +92,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
         form.reset({
           title: recipeToEdit.title,
           ingredients: recipeToEdit.ingredients.map(ing => ({ 
-            id: ing.id, 
+            id: ing.id || crypto.randomUUID(), // Ensure ID exists for existing items
             name: ing.name, 
             quantity: ing.quantity 
           })),
@@ -94,8 +109,8 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
 
   const onSubmit = async (data: RecipeFormData) => {
     await onSave(data, recipeToEdit?.id);
-    if (!form.formState.isSubmitting && form.formState.isSubmitSuccessful) {
-        onClose();
+     if (!form.formState.isSubmitting && form.formState.isSubmitSuccessful) {
+        onClose(); // This will trigger the useEffect to reset image states
     }
   };
 
@@ -148,10 +163,77 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
       form.setValue('title', suggestedName);
       setSuggestedName(''); 
     }
-  }
+  };
+
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setSelectedImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSelectedImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setSelectedImageFile(null);
+      setSelectedImagePreview(null);
+    }
+  };
+
+  const handleScanRecipeImage = async () => {
+    if (!selectedImageFile || !selectedImagePreview) {
+      toast({
+        title: 'No Image Selected',
+        description: 'Please select an image file to scan.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsScanningRecipe(true);
+    try {
+      const imageDataUri = selectedImagePreview; // Already a data URI
+      const extractedData = await extractRecipeFromImage({ imageDataUri });
+
+      // Populate form with extracted data
+      form.reset({ // reset is better here to also clear existing array fields
+        title: extractedData.title || '',
+        ingredients: (extractedData.ingredients || []).map(ing => ({
+          id: crypto.randomUUID(), // Each ingredient needs a unique ID for useFieldArray
+          name: ing.name || '',
+          quantity: ing.quantity || '',
+        })),
+        instructions: extractedData.instructions && extractedData.instructions.length > 0 ? extractedData.instructions : [''],
+        cuisine: extractedData.cuisine || '',
+      });
+
+      // Ensure at least one empty ingredient/instruction field if AI returns empty arrays
+      if (!extractedData.ingredients || extractedData.ingredients.length === 0) {
+        form.setValue('ingredients', [{ id: crypto.randomUUID(), name: '', quantity: '' }]);
+      }
+      if (!extractedData.instructions || extractedData.instructions.length === 0) {
+         form.setValue('instructions', ['']);
+      }
+
+
+      toast({
+        title: 'Recipe Scanned!',
+        description: 'Recipe details have been pre-filled. Please review and edit as needed.',
+      });
+    } catch (error) {
+      console.error('Error scanning recipe image:', error);
+      toast({
+        title: 'Scanning Error',
+        description: 'Failed to extract recipe from image. Please try again or enter manually.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsScanningRecipe(false);
+    }
+  };
 
   const handleCloseDialog = () => {
-    if (isSaving) return;
+    if (isSaving || isScanningRecipe) return;
     onClose(); 
   }
 
@@ -163,12 +245,55 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
             {recipeToEdit ? 'Edit Recipe' : 'Add New Recipe'}
           </DialogTitle>
           <DialogDescription>
-            {recipeToEdit ? 'Update the details of your recipe.' : 'Fill in the details for your new culinary creation.'}
+            {recipeToEdit ? 'Update the details of your recipe.' : 'Fill in the details for your new culinary creation, or upload an image to scan.'}
           </DialogDescription>
         </DialogHeader>
+        
+        {/* Image Upload and Scan Section */}
+        <div className="space-y-4 my-4 p-4 border rounded-md bg-secondary/30">
+          <h3 className="text-lg font-medium text-foreground">Scan Recipe from Image (Optional)</h3>
+          <div className="grid sm:grid-cols-2 gap-4 items-center">
+            <div>
+              <Label htmlFor="recipe-image-upload" className="text-sm font-medium">Upload Image</Label>
+              <Input
+                id="recipe-image-upload"
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                ref={fileInputRef}
+                className="mt-1 text-sm"
+                disabled={isScanningRecipe || isSaving}
+              />
+              {selectedImagePreview && (
+                <div className="mt-3 relative w-full aspect-video rounded-md overflow-hidden border">
+                  <Image src={selectedImagePreview} alt="Recipe preview" layout="fill" objectFit="contain" data-ai-hint="food cooking" />
+                </div>
+              )}
+            </div>
+             <Button
+                type="button"
+                onClick={handleScanRecipeImage}
+                disabled={!selectedImageFile || isScanningRecipe || isSaving || isSuggestingName}
+                variant="outline"
+                className="w-full sm:w-auto sm:self-end"
+              >
+                {isScanningRecipe ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <ScanEye className="mr-2 h-4 w-4" />
+                )}
+                Scan Image with AI
+              </Button>
+          </div>
+           <p className="text-xs text-muted-foreground">
+            Upload an image of a recipe (e.g., from a cookbook or website). The AI will try to extract the details.
+          </p>
+        </div>
+
+
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <fieldset disabled={isSaving} className="space-y-6">
+            <fieldset disabled={isSaving || isScanningRecipe} className="space-y-6">
               <FormField
                 control={form.control}
                 name="title"
@@ -182,27 +307,30 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                   </FormItem>
                 )}
               />
-               <Button
-                type="button"
-                onClick={handleSuggestName}
-                disabled={isSuggestingName || isSaving}
-                variant="outline"
-                className="w-full"
-              >
-                {isSuggestingName ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Sparkles className="mr-2 h-4 w-4" />
+              <div className="space-y-2">
+                 <Button
+                  type="button"
+                  onClick={handleSuggestName}
+                  disabled={isSuggestingName || isSaving || isScanningRecipe}
+                  variant="outline"
+                  className="w-full"
+                >
+                  {isSuggestingName ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="mr-2 h-4 w-4" />
+                  )}
+                  Suggest Recipe Title with AI
+                </Button>
+                
+                {suggestedName && (
+                  <div className="p-3 bg-accent/10 border border-accent/30 rounded-md flex items-center justify-between">
+                    <p className="text-sm">Suggested: <span className="font-semibold">{suggestedName}</span></p>
+                    <Button type="button" size="sm" onClick={handleUseSuggestedName} disabled={isSaving || isSuggestingName || isScanningRecipe}>Use this name</Button>
+                  </div>
                 )}
-                Suggest Recipe Title with AI
-              </Button>
+              </div>
               
-              {suggestedName && (
-                <div className="p-3 bg-accent/10 border border-accent/30 rounded-md flex items-center justify-between">
-                  <p className="text-sm">Suggested: <span className="font-semibold">{suggestedName}</span></p>
-                  <Button type="button" size="sm" onClick={handleUseSuggestedName} disabled={isSaving || isSuggestingName}>Use this name</Button>
-                </div>
-              )}
 
               <div>
                 <FormLabel className="text-base">Ingredients</FormLabel>
@@ -246,7 +374,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                       onClick={() => removeIngredient(index)}
                       className="text-muted-foreground hover:text-destructive"
                       aria-label="Remove ingredient"
-                      disabled={isSaving}
+                      disabled={isSaving || isScanningRecipe}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -256,9 +384,9 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => appendIngredient({ name: '', quantity: '' })}
+                  onClick={() => appendIngredient({ id: crypto.randomUUID(), name: '', quantity: '' })}
                   className="mt-2"
-                  disabled={isSaving}
+                  disabled={isSaving || isScanningRecipe}
                 >
                   <PlusCircle className="mr-2 h-4 w-4" /> Add Ingredient
                 </Button>
@@ -285,7 +413,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                     <FormField
                       control={form.control}
                       name={`instructions.${index}`}
-                      render={({ field: instructionField }) => ( // Renamed field to avoid conflict
+                      render={({ field: instructionField }) => ( 
                         <FormItem className="flex-grow">
                           <FormLabel className="text-sm sr-only">Instruction Step {index + 1}</FormLabel>
                           <FormControl>
@@ -301,7 +429,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                         variant="ghost"
                         size="icon"
                         onClick={() => swapInstruction(index, index - 1)}
-                        disabled={index === 0 || !!isSaving}
+                        disabled={index === 0 || !!isSaving || !!isScanningRecipe}
                         className="text-muted-foreground hover:text-primary h-7 w-7"
                         aria-label={`Move instruction step ${index + 1} up`}
                       >
@@ -314,7 +442,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                         onClick={() => removeInstruction(index)}
                         className="text-muted-foreground hover:text-destructive h-7 w-7" 
                         aria-label={`Remove instruction step ${index + 1}`}
-                        disabled={isSaving}
+                        disabled={isSaving || isScanningRecipe}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -323,7 +451,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                         variant="ghost"
                         size="icon"
                         onClick={() => swapInstruction(index, index + 1)}
-                        disabled={index === instructionFields.length - 1 || !!isSaving}
+                        disabled={index === instructionFields.length - 1 || !!isSaving || !!isScanningRecipe}
                         className="text-muted-foreground hover:text-primary h-7 w-7"
                         aria-label={`Move instruction step ${index + 1} down`}
                       >
@@ -338,7 +466,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                   size="sm"
                   onClick={() => appendInstruction('')}
                   className="mt-2"
-                  disabled={isSaving}
+                  disabled={isSaving || isScanningRecipe}
                 >
                   <PlusCircle className="mr-2 h-4 w-4" /> Add Instruction Step
                 </Button>
@@ -346,10 +474,10 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
               </div>
             </fieldset>
             <DialogFooter className="pt-4">
-              <Button type="button" variant="outline" onClick={handleCloseDialog} className="mr-2" disabled={isSaving}>
+              <Button type="button" variant="outline" onClick={handleCloseDialog} className="mr-2" disabled={isSaving || isScanningRecipe}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSaving || isSuggestingName}>
+              <Button type="submit" disabled={isSaving || isSuggestingName || isScanningRecipe}>
                 {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : recipeToEdit ? 'Save Changes' : 'Save Recipe'}
               </Button>
             </DialogFooter>
