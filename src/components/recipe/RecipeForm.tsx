@@ -276,7 +276,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                     type="button"
                     onClick={handleSuggestName}
                     disabled={isSuggestingName || isSaving || isScanningRecipe || isScanDialogValidOpen}
-                    variant="default" // Changed from outline
+                    variant="default" 
                     className="w-full"
                   >
                     {isSuggestingName ? (
@@ -299,7 +299,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                   type="button"
                   onClick={() => setIsScanDialogValidOpen(true)}
                   disabled={isSaving || isSuggestingName || isScanningRecipe || isScanDialogValidOpen}
-                  variant="default" // Changed from outline
+                  variant="default" 
                   className="w-full"
                 >
                   <ScanEye className="mr-2 h-4 w-4" />
@@ -357,7 +357,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                       />
                       <Button
                         type="button"
-                        variant="default" // Changed from ghost
+                        variant="ghost" 
                         size="icon"
                         onClick={() => removeIngredient(index)}
                         className="text-muted-foreground hover:text-destructive" 
@@ -370,7 +370,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                   ))}
                   <Button
                     type="button"
-                    variant="default" // Changed from outline
+                    variant="outline" 
                     size="sm"
                     onClick={() => appendIngredient({ id: crypto.randomUUID(), name: '', quantity: '' })}
                     className="mt-2"
@@ -400,7 +400,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                       <div className="flex flex-col gap-1 mt-1">
                         <Button
                           type="button"
-                          variant="default" // Changed from ghost
+                          variant="ghost" 
                           size="icon"
                           onClick={() => swapInstruction(index, index - 1)}
                           disabled={index === 0 || !!isSaving || !!isScanningRecipe || isScanDialogValidOpen}
@@ -411,7 +411,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                         </Button>
                         <Button
                           type="button"
-                          variant="default" // Changed from ghost
+                          variant="ghost" 
                           size="icon"
                           onClick={() => removeInstruction(index)}
                           className="text-muted-foreground hover:text-destructive h-7 w-7" 
@@ -422,7 +422,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                         </Button>
                          <Button
                           type="button"
-                          variant="default" // Changed from ghost
+                          variant="ghost" 
                           size="icon"
                           onClick={() => swapInstruction(index, index + 1)}
                           disabled={index === instructionFields.length - 1 || !!isSaving || !!isScanningRecipe || isScanDialogValidOpen}
@@ -436,7 +436,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                   ))}
                   <Button
                     type="button"
-                    variant="default" // Changed from outline
+                    variant="outline" 
                     size="sm"
                     onClick={() => appendInstruction('')}
                     className="mt-2"
@@ -514,3 +514,4 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
     </>
   );
 }
+
