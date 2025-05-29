@@ -181,6 +181,22 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                   </FormItem>
                 )}
               />
+
+              <Button
+                type="button"
+                onClick={handleSuggestName}
+                disabled={isSuggestingName || isSaving}
+                variant="outline"
+                className="w-full"
+              >
+                {isSuggestingName ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="mr-2 h-4 w-4" />
+                )}
+                Suggest Recipe Title with AI
+              </Button>
+              
               {suggestedName && (
                 <div className="p-3 bg-accent/10 border border-accent/30 rounded-md flex items-center justify-between">
                   <p className="text-sm">Suggested: <span className="font-semibold">{suggestedName}</span></p>
@@ -262,21 +278,6 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                 )}
               />
               
-              <Button
-                type="button"
-                onClick={handleSuggestName}
-                disabled={isSuggestingName || isSaving}
-                variant="outline"
-                className="w-full"
-              >
-                {isSuggestingName ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Sparkles className="mr-2 h-4 w-4" />
-                )}
-                Suggest Recipe Title with AI
-              </Button>
-
               <div>
                 <FormLabel className="text-base">Instructions</FormLabel>
                 {instructionFields.map((field, index) => (
@@ -334,3 +335,4 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
     </Dialog>
   );
 }
+
