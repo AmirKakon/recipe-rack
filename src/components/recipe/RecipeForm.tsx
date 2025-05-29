@@ -447,11 +447,11 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                   <FormMessage>{form.formState.errors.instructions?.message || form.formState.errors.instructions?.root?.message}</FormMessage>
                 </div>
               </fieldset>
-              <DialogFooter className="pt-4 space-y-3 sm:space-y-0">
-                <Button type="button" variant="default" onClick={handleCloseMainDialog} className="mr-2" disabled={isSaving || isScanningRecipe}>
+              <DialogFooter className="pt-4">
+                <Button type="button" variant="default" onClick={handleCloseMainDialog} className="w-full sm:w-auto" disabled={isSaving || isScanningRecipe}>
                   Cancel
                 </Button>
-                <Button type="submit" variant="default" disabled={isSaving || isSuggestingName || isScanningRecipe || isScanDialogValidOpen}>
+                <Button type="submit" variant="default" className="w-full sm:w-auto mb-3 sm:mb-0" disabled={isSaving || isSuggestingName || isScanningRecipe || isScanDialogValidOpen}>
                   {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : recipeToEdit ? 'Save Changes' : 'Save Recipe'}
                 </Button>
               </DialogFooter>
@@ -491,14 +491,15 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
               The AI will pre-fill the recipe form with the extracted information. You can review and edit it before saving.
             </p>
           </div>
-          <DialogFooter className="space-y-3 sm:space-y-0">
-            <Button type="button" variant="default" onClick={handleCloseScanDialog} className="mr-2" disabled={isScanningRecipe}>
+          <DialogFooter>
+            <Button type="button" variant="default" onClick={handleCloseScanDialog} className="w-full sm:w-auto" disabled={isScanningRecipe}>
               Cancel
             </Button>
             <Button
               type="button"
               variant="default"
               onClick={handleScanRecipeImage}
+              className="w-full sm:w-auto mb-3 sm:mb-0"
               disabled={!selectedImageFile || isScanningRecipe}
             >
               {isScanningRecipe ? (
