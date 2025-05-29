@@ -5,26 +5,29 @@ import { useState, useEffect } from 'react';
 import { Header } from '@/components/layout/Header';
 import { RecipeList } from '@/components/recipe/RecipeList';
 import { RecipeForm } from '@/components/recipe/RecipeForm';
-import type { Recipe, Ingredient } from '@/lib/types';
+import type { Recipe } from '@/lib/types';
 import type { RecipeFormData } from '@/lib/schemas';
 import useLocalStorage from '@/hooks/useLocalStorage';
 import { useToast } from '@/hooks/use-toast';
-import { Button } from '@/components/ui/button'; // For placeholder if no recipes
-import { CookingPot } from 'lucide-react'; // Example icon
+import { Button } from '@/components/ui/button';
+import { CookingPot } from 'lucide-react';
 
 export default function HomePage() {
   const [recipes, setRecipes] = useLocalStorage<Recipe[]>('recipes', []);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const { toast } = useToast();
+  const [hasMounted, setHasMounted] = useState(false);
 
-  // Ensure recipes are loaded on client mount. useLocalStorage handles this.
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
 
   const handleAddRecipe = (recipeData: RecipeFormData) => {
     const newRecipe: Recipe = {
       id: crypto.randomUUID(),
       title: recipeData.title,
       ingredients: recipeData.ingredients.map(ing => ({ ...ing, id: crypto.randomUUID() })),
-      instructions: recipeData.instructions,
+      instructions: recipeData.instructions, // This will now be string[] from RecipeFormData
       cuisine: recipeData.cuisine,
     };
     setRecipes((prevRecipes) => [...prevRecipes, newRecipe]);
@@ -46,13 +49,6 @@ export default function HomePage() {
     }
   };
   
-  // Hydration guard for initial render
-  const [hasMounted, setHasMounted] = useState(false);
-  useEffect(() => {
-    setHasMounted(true);
-  }, []);
-
-
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Header onAddRecipeClick={() => setIsFormOpen(true)} />
@@ -72,7 +68,7 @@ export default function HomePage() {
         {hasMounted && recipes.length > 0 && (
           <RecipeList recipes={recipes} onDeleteRecipe={handleDeleteRecipe} />
         )}
-         {!hasMounted && ( // Skeleton or loading state for SSR/initial load
+         {!hasMounted && ( 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4 md:p-8">
             {[1,2,3].map(i => (
               <div key={i} className="bg-card rounded-lg shadow-md p-6 animate-pulse">

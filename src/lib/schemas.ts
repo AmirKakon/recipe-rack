@@ -9,7 +9,11 @@ export const ingredientSchema = z.object({
 export const recipeFormSchema = z.object({
   title: z.string().min(1, "Title is required").max(150, "Title too long"),
   ingredients: z.array(ingredientSchema).min(1, "At least one ingredient is required"),
-  instructions: z.string().min(1, "Instructions are required").max(5000, "Instructions too long"),
+  instructions: z.array(
+    z.string()
+      .min(1, "Instruction step cannot be empty.")
+      .max(1000, "Instruction step is too long (max 1000 characters).")
+  ).min(1, "At least one instruction step is required."),
   cuisine: z.string().max(50, "Cuisine name too long").optional(),
 });
 

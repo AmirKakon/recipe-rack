@@ -8,6 +8,6 @@ export interface Recipe {
   id: string;
   title: string;
   ingredients: Ingredient[];
-  instructions: string;
+  instructions: string[]; // Changed from string to string[]
   cuisine?: string;
 }

@@ -14,11 +14,11 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import type { Recipe, Ingredient } from '@/lib/types';
-import { recipeFormSchema, RecipeFormData } from '@/lib/schemas';
+import type { RecipeFormData } from '@/lib/schemas';
+import { recipeFormSchema } from '@/lib/schemas';
 import { suggestRecipeName } from '@/ai/flows/suggest-recipe-name';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Sparkles, Trash2, X } from 'lucide-react';
+import { Loader2, PlusCircle, Sparkles, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 interface RecipeFormProps {
@@ -33,14 +33,19 @@ export function RecipeForm({ isOpen, onClose, onSave }: RecipeFormProps) {
     defaultValues: {
       title: '',
       ingredients: [{ name: '', quantity: '' }],
-      instructions: '',
+      instructions: [''], // Default to one empty instruction step
       cuisine: '',
     },
   });
 
-  const { fields, append, remove } = useFieldArray({
+  const { fields: ingredientFields, append: appendIngredient, remove: removeIngredient } = useFieldArray({
     control: form.control,
     name: 'ingredients',
+  });
+
+  const { fields: instructionFields, append: appendInstruction, remove: removeInstruction } = useFieldArray({
+    control: form.control,
+    name: 'instructions',
   });
 
   const { toast } = useToast();
@@ -105,8 +110,19 @@ export function RecipeForm({ isOpen, onClose, onSave }: RecipeFormProps) {
     }
   }
 
+  const handleCloseDialog = () => {
+    onClose();
+    form.reset({
+        title: '',
+        ingredients: [{ name: '', quantity: '' }],
+        instructions: [''],
+        cuisine: '',
+    });
+    setSuggestedName('');
+  }
+
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) { onClose(); form.reset(); setSuggestedName(''); } }}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) { handleCloseDialog(); } }}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto p-6 rounded-lg shadow-xl">
         <DialogHeader>
           <DialogTitle className="text-2xl font-semibold">Add New Recipe</DialogTitle>
@@ -136,7 +152,7 @@ export function RecipeForm({ isOpen, onClose, onSave }: RecipeFormProps) {
 
             <div>
               <FormLabel className="text-base">Ingredients</FormLabel>
-              {fields.map((field, index) => (
+              {ingredientFields.map((field, index) => (
                 <div key={field.id} className="flex items-end gap-2 mt-2 mb-3 p-3 border rounded-md bg-secondary/30">
                   <FormField
                     control={form.control}
@@ -168,7 +184,7 @@ export function RecipeForm({ isOpen, onClose, onSave }: RecipeFormProps) {
                     type="button"
                     variant="ghost"
                     size="icon"
-                    onClick={() => remove(index)}
+                    onClick={() => removeIngredient(index)}
                     className="text-muted-foreground hover:text-destructive"
                     aria-label="Remove ingredient"
                   >
@@ -180,7 +196,7 @@ export function RecipeForm({ isOpen, onClose, onSave }: RecipeFormProps) {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => append({ name: '', quantity: '' })}
+                onClick={() => appendIngredient({ name: '', quantity: '' })}
                 className="mt-2"
               >
                 <PlusCircle className="mr-2 h-4 w-4" /> Add Ingredient
@@ -216,21 +232,50 @@ export function RecipeForm({ isOpen, onClose, onSave }: RecipeFormProps) {
               Suggest Recipe Title with AI
             </Button>
 
-            <FormField
-              control={form.control}
-              name="instructions"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-base">Instructions</FormLabel>
-                  <FormControl>
-                    <Textarea placeholder="Step 1: ..." {...field} rows={6} className="text-base py-2 px-3" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div>
+              <FormLabel className="text-base">Instructions</FormLabel>
+              {instructionFields.map((field, index) => (
+                <div key={field.id} className="flex items-start gap-2 mt-2 mb-3 p-3 border rounded-md bg-secondary/30">
+                  <FormField
+                    control={form.control}
+                    name={`instructions.${index}`}
+                    render={({ field }) => (
+                      <FormItem className="flex-grow">
+                        <FormLabel className="text-sm sr-only">Instruction Step {index + 1}</FormLabel>
+                        <FormControl>
+                          <Textarea placeholder={`Step ${index + 1}...`} {...field} rows={3} className="text-base py-2 px-3 resize-none" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeInstruction(index)}
+                    className="text-muted-foreground hover:text-destructive mt-1" // Adjusted margin for alignment with textarea
+                    aria-label={`Remove instruction step ${index + 1}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => appendInstruction('')}
+                className="mt-2"
+              >
+                <PlusCircle className="mr-2 h-4 w-4" /> Add Instruction Step
+              </Button>
+               {/* General error message for the instructions array itself (e.g. if it's empty) */}
+              <FormMessage>{form.formState.errors.instructions?.message || form.formState.errors.instructions?.root?.message}</FormMessage>
+            </div>
+
             <DialogFooter className="pt-4">
-              <Button type="button" variant="outline" onClick={() => { onClose(); form.reset(); setSuggestedName(''); }} className="mr-2">
+              <Button type="button" variant="outline" onClick={handleCloseDialog} className="mr-2">
                 Cancel
               </Button>
               <Button type="submit">Save Recipe</Button>

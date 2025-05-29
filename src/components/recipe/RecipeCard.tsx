@@ -1,7 +1,7 @@
 
 'use client';
 
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import type { Recipe } from '@/lib/types';
 import { Trash2 } from 'lucide-react';
@@ -17,7 +17,7 @@ export function RecipeCard({ recipe, onDelete }: RecipeCardProps) {
     <Card className="flex flex-col h-full shadow-lg hover:shadow-xl transition-shadow duration-300 rounded-lg overflow-hidden">
       <CardHeader className="p-6 bg-card">
         <div className="flex justify-between items-start">
-          <CardTitle className="text-2xl font-bold tracking-tight">{recipe.title}</CardTitle>
+          <CardTitle className="text-2xl font-bold tracking-tight text-card-foreground">{recipe.title}</CardTitle>
           {recipe.cuisine && <Badge variant="secondary" className="ml-2 shrink-0">{recipe.cuisine}</Badge>}
         </div>
       </CardHeader>
@@ -34,9 +34,17 @@ export function RecipeCard({ recipe, onDelete }: RecipeCardProps) {
         </div>
         <div className="mt-4">
           <h3 className="text-lg font-semibold mb-2 text-foreground">Instructions:</h3>
-          <p className="whitespace-pre-wrap text-sm text-muted-foreground leading-relaxed">
-            {recipe.instructions}
-          </p>
+          {recipe.instructions && recipe.instructions.length > 0 ? (
+            <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
+              {recipe.instructions.map((step, index) => (
+                <li key={index} className="leading-relaxed whitespace-pre-wrap">
+                  {step}
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="text-sm text-muted-foreground">No instructions provided.</p>
+          )}
         </div>
       </CardContent>
       <CardFooter className="p-6 border-t bg-card">
