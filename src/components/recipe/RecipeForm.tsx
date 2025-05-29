@@ -19,9 +19,9 @@ import type { RecipeFormData } from '@/lib/schemas';
 import { recipeFormSchema } from '@/lib/schemas';
 import { suggestRecipeName } from '@/ai/flows/suggest-recipe-name';
 import { extractRecipeFromImage } from '@/ai/flows/extract-recipe-from-image-flow.ts';
-import { suggestRecipeDetails } from '@/ai/flows/suggest-recipe-details-flow'; // New import
+import { suggestRecipeDetails } from '@/ai/flows/suggest-recipe-details-flow';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Sparkles, Trash2, ArrowUp, ArrowDown, ScanEye, Wand2 } from 'lucide-react'; // Added Wand2
+import { Loader2, PlusCircle, Sparkles, Trash2, ArrowUp, ArrowDown, ScanEye, Wand2 } from 'lucide-react';
 import { useEffect, useState, useRef } from 'react';
 import type { Recipe } from '@/lib/types';
 import Image from 'next/image';
@@ -72,8 +72,8 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
 
   const [isScanDialogValidOpen, setIsScanDialogValidOpen] = useState(false);
   const [isScanningRecipe, setIsScanningRecipe] = useState(false);
-  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
-  const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const resetSuggestionStates = () => {
@@ -83,9 +83,9 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
     setSuggestedServingSize('');
   };
 
-  const resetScanImageState = () => {
-    setSelectedImageFile(null);
-    setSelectedImagePreview(null);
+  const resetScanFileState = () => {
+    setSelectedFile(null);
+    setFilePreview(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -93,7 +93,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
 
   useEffect(() => {
     if (isOpen) {
-      resetScanImageState();
+      resetScanFileState();
       resetSuggestionStates();
       setIsScanDialogValidOpen(false); 
 
@@ -262,71 +262,109 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
   };
 
 
-  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      setSelectedImageFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setSelectedImagePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      setSelectedFile(file);
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setFilePreview(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        // For PDFs or other file types, don't attempt to set an image preview
+        setFilePreview(null); 
+      }
     } else {
-      setSelectedImageFile(null);
-      setSelectedImagePreview(null);
+      setSelectedFile(null);
+      setFilePreview(null);
     }
   };
 
-  const handleScanRecipeImage = async () => {
-    if (!selectedImageFile || !selectedImagePreview) {
+  const handleScanRecipeFile = async () => {
+    if (!selectedFile) {
       toast({
-        title: 'No Image Selected',
-        description: 'Please select an image file to scan.',
+        title: 'No File Selected',
+        description: 'Please select an image or PDF file to scan.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (!filePreview && selectedFile.type.startsWith('image/')) {
+      toast({
+        title: 'Image Preview Not Ready',
+        description: 'Please wait for the image preview to load before scanning.',
         variant: 'destructive',
       });
       return;
     }
 
+
     setIsScanningRecipe(true);
     try {
-      const imageDataUri = selectedImagePreview; 
-      const extractedData = await extractRecipeFromImage({ imageDataUri });
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const fileDataUri = reader.result as string;
+        try {
+            const extractedData = await extractRecipeFromImage({ fileDataUri });
 
-      form.reset({ 
-        title: extractedData.title || '',
-        ingredients: (extractedData.ingredients && extractedData.ingredients.length > 0 ? extractedData.ingredients : [{ id: crypto.randomUUID(), name: '', quantity: '' }]).map(ing => ({
-          id: ing.id || crypto.randomUUID(), 
-          name: ing.name || '',
-          quantity: ing.quantity || '',
-        })),
-        instructions: extractedData.instructions && extractedData.instructions.length > 0 ? extractedData.instructions : [''],
-        cuisine: extractedData.cuisine || '',
-        prepTime: extractedData.prepTime || '',
-        cookTime: extractedData.cookTime || '',
-        servingSize: extractedData.servingSize || '',
-      });
+            form.reset({ 
+              title: extractedData.title || '',
+              ingredients: (extractedData.ingredients && extractedData.ingredients.length > 0 ? extractedData.ingredients : [{ id: crypto.randomUUID(), name: '', quantity: '' }]).map(ing => ({
+                id: ing.id || crypto.randomUUID(), 
+                name: ing.name || '',
+                quantity: ing.quantity || '',
+              })),
+              instructions: extractedData.instructions && extractedData.instructions.length > 0 ? extractedData.instructions : [''],
+              cuisine: extractedData.cuisine || '',
+              prepTime: extractedData.prepTime || '',
+              cookTime: extractedData.cookTime || '',
+              servingSize: extractedData.servingSize || '',
+            });
 
-      toast({
-        title: 'Recipe Scanned!',
-        description: 'Recipe details have been pre-filled. Please review and edit as needed.',
-      });
-      setIsScanDialogValidOpen(false); 
-      resetScanImageState(); 
+            toast({
+              title: 'Recipe Scanned!',
+              description: 'Recipe details have been pre-filled. Please review and edit as needed.',
+            });
+            setIsScanDialogValidOpen(false); 
+            resetScanFileState(); 
+        } catch (aiError) {
+            console.error('Error scanning recipe file (AI processing):', aiError);
+            toast({
+              title: 'Scanning Error',
+              description: aiError instanceof Error ? aiError.message : 'Failed to extract recipe from file. Please try again or enter manually.',
+              variant: 'destructive',
+            });
+        } finally {
+            setIsScanningRecipe(false);
+        }
+      };
+      reader.onerror = () => {
+        console.error('Error reading file:', reader.error);
+        toast({
+          title: 'File Read Error',
+          description: 'Could not read the selected file.',
+          variant: 'destructive',
+        });
+        setIsScanningRecipe(false);
+      };
+      reader.readAsDataURL(selectedFile);
     } catch (error) {
-      console.error('Error scanning recipe image:', error);
+      // This catch block is for errors before starting FileReader, though less likely
+      console.error('Error initiating recipe file scan:', error);
       toast({
-        title: 'Scanning Error',
-        description: 'Failed to extract recipe from image. Please try again or enter manually.',
+        title: 'Scanning Initiation Error',
+        description: 'Could not start the scanning process.',
         variant: 'destructive',
       });
-    } finally {
       setIsScanningRecipe(false);
     }
   };
   
   const handleCloseMainDialog = () => {
     if (isSaving) return; 
-    resetScanImageState();
+    resetScanFileState();
     resetSuggestionStates();
     setIsScanDialogValidOpen(false);
     onClose(); 
@@ -334,7 +372,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
 
   const handleCloseScanDialog = () => {
     if (isScanningRecipe) return; 
-    resetScanImageState();
+    resetScanFileState();
     setIsScanDialogValidOpen(false);
   }
 
@@ -636,30 +674,36 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
         </DialogContent>
       </Dialog>
 
-      {/* Scan Image Dialog */}
+      {/* Scan File Dialog */}
       <Dialog open={isScanDialogValidOpen} onOpenChange={(open) => { if (!open) { handleCloseScanDialog(); }}}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-xl font-semibold">Scan Recipe from Image</DialogTitle>
+            <DialogTitle className="text-xl font-semibold">Scan Recipe from File</DialogTitle>
             <DialogDescription>
-              Upload an image of a recipe. The AI will attempt to extract the details.
+              Upload an image or PDF file of a recipe. The AI will attempt to extract the details. 
+              PDF scanning may be less effective.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div>
-              <Label htmlFor="recipe-image-upload-modal" className="text-sm font-medium">Upload Image</Label>
+              <Label htmlFor="recipe-file-upload-modal" className="text-sm font-medium">Upload Image or PDF</Label>
               <Input
-                id="recipe-image-upload-modal"
+                id="recipe-file-upload-modal"
                 type="file"
-                accept="image/*"
-                onChange={handleImageChange}
+                accept="image/*,application/pdf"
+                onChange={handleFileChange}
                 ref={fileInputRef}
                 className="mt-1 text-sm"
                 disabled={isScanningRecipe}
               />
-              {selectedImagePreview && (
+              {filePreview && selectedFile?.type.startsWith('image/') && (
                 <div className="mt-3 relative w-full aspect-video rounded-md overflow-hidden border">
-                  <Image src={selectedImagePreview} alt="Recipe preview" layout="fill" objectFit="contain" data-ai-hint="food cooking" />
+                  <Image src={filePreview} alt="Recipe preview" layout="fill" objectFit="contain" data-ai-hint="food cooking" />
+                </div>
+              )}
+              {selectedFile && !filePreview && selectedFile.type === 'application/pdf' && (
+                <div className="mt-3 p-3 border rounded-md bg-secondary/30 text-sm text-muted-foreground">
+                  PDF selected: {selectedFile.name} (Preview not available for PDFs)
                 </div>
               )}
             </div>
@@ -674,9 +718,9 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
             <Button
               type="button"
               variant="default"
-              onClick={handleScanRecipeImage}
+              onClick={handleScanRecipeFile}
               className="w-full sm:w-auto mb-3 sm:mb-0"
-              disabled={!selectedImageFile || isScanningRecipe}
+              disabled={!selectedFile || isScanningRecipe}
             >
               {isScanningRecipe ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

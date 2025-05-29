@@ -1,26 +1,27 @@
 
 'use server';
 /**
- * @fileOverview Extracts recipe details from an image using AI.
+ * @fileOverview Extracts recipe details from an image or PDF using AI.
  *
- * - extractRecipeFromImage - A function that extracts recipe details from an image.
- * - ExtractRecipeFromImageInput - The input type for the extractRecipeFromImage function.
- * - ExtractRecipeFromImageOutput - The return type for the extractRecipeFromImage function.
+ * - extractRecipeFromImage - A function that extracts recipe details.
+ * - ExtractRecipeFromImageInput - The input type.
+ * - ExtractRecipeFromImageOutput - The return type.
  */
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
 const ExtractRecipeFromImageInputSchema = z.object({
-  imageDataUri: z
+  fileDataUri: z
     .string()
     .describe(
-      "A photo of a recipe, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
+      "A photo of a recipe (image/*) or a recipe document (application/pdf), as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
     ),
 });
 export type ExtractRecipeFromImageInput = z.infer<typeof ExtractRecipeFromImageInputSchema>;
 
 const ExtractedIngredientSchema = z.object({
+  id: z.string().uuid().optional().describe("A unique identifier for the ingredient, if available or generated."),
   name: z.string().describe('The name of the ingredient. Use "" if not found/unclear.'),
   quantity: z.string().describe('The quantity or amount of the ingredient. Use "" if not found/unclear.'),
 });
@@ -44,11 +45,11 @@ const prompt = ai.definePrompt({
   name: 'extractRecipeFromImagePrompt',
   input: {schema: ExtractRecipeFromImageInputSchema},
   output: {schema: ExtractRecipeFromImageOutputSchema},
-  prompt: `You are an expert recipe extraction AI. Analyze the provided image of a recipe.
+  prompt: `You are an expert recipe extraction AI. Analyze the provided image or PDF document of a recipe.
 Your task is to extract the title, ingredients, instructions, cuisine tags, preparation time, cooking time, and serving size.
 Respond with a JSON object adhering *strictly* to the schema provided.
 
-- If a piece of information (e.g., cuisine, prep time, or a specific ingredient's quantity) is not found or unclear from the image, use an empty string "" for that string field.
+- If a piece of information (e.g., cuisine, prep time, or a specific ingredient's quantity) is not found or unclear from the file, use an empty string "" for that string field.
 - For arrays (ingredients, instructions): if no items are found or they are unclear, provide an empty array [].
 - Do not omit any fields from the main JSON structure. All specified fields (title, ingredients, instructions, cuisine, prepTime, cookTime, servingSize) must be present.
 
@@ -65,8 +66,8 @@ Detailed Extraction Guidelines:
 - **cookTime**: The cooking time (e.g., "1 hr 15 mins"). Use "" if not explicitly stated or unclear.
 - **servingSize**: The number of servings (e.g., "Serves 4", "Makes 12 cookies"). Use "" if not explicitly stated or unclear.
 
-Image to analyze:
-{{media url=imageDataUri}}`,
+File to analyze:
+{{media url=fileDataUri}}`,
 });
 
 const extractRecipeFromImageFlow = ai.defineFlow(
