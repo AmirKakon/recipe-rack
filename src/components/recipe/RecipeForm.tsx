@@ -276,7 +276,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                     type="button"
                     onClick={handleSuggestName}
                     disabled={isSuggestingName || isSaving || isScanningRecipe || isScanDialogValidOpen}
-                    variant="outline"
+                    variant="default" // Changed from outline
                     className="w-full"
                   >
                     {isSuggestingName ? (
@@ -290,7 +290,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                   {suggestedName && (
                     <div className="p-3 bg-accent/10 border border-accent/30 rounded-md flex items-center justify-between">
                       <p className="text-sm">Suggested: <span className="font-semibold">{suggestedName}</span></p>
-                      <Button type="button" size="sm" onClick={handleUseSuggestedName} disabled={isSaving || isSuggestingName || isScanningRecipe || isScanDialogValidOpen}>Use this name</Button>
+                      <Button type="button" size="sm" onClick={handleUseSuggestedName} variant="default" disabled={isSaving || isSuggestingName || isScanningRecipe || isScanDialogValidOpen}>Use this name</Button>
                     </div>
                   )}
                 </div>
@@ -299,7 +299,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                   type="button"
                   onClick={() => setIsScanDialogValidOpen(true)}
                   disabled={isSaving || isSuggestingName || isScanningRecipe || isScanDialogValidOpen}
-                  variant="outline"
+                  variant="default" // Changed from outline
                   className="w-full"
                 >
                   <ScanEye className="mr-2 h-4 w-4" />
@@ -357,10 +357,10 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                       />
                       <Button
                         type="button"
-                        variant="ghost"
+                        variant="default" // Changed from ghost
                         size="icon"
                         onClick={() => removeIngredient(index)}
-                        className="text-muted-foreground hover:text-destructive"
+                        className="text-muted-foreground hover:text-destructive" 
                         aria-label="Remove ingredient"
                         disabled={isSaving || isScanningRecipe || isScanDialogValidOpen}
                       >
@@ -370,7 +370,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                   ))}
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="default" // Changed from outline
                     size="sm"
                     onClick={() => appendIngredient({ id: crypto.randomUUID(), name: '', quantity: '' })}
                     className="mt-2"
@@ -400,7 +400,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                       <div className="flex flex-col gap-1 mt-1">
                         <Button
                           type="button"
-                          variant="ghost"
+                          variant="default" // Changed from ghost
                           size="icon"
                           onClick={() => swapInstruction(index, index - 1)}
                           disabled={index === 0 || !!isSaving || !!isScanningRecipe || isScanDialogValidOpen}
@@ -411,7 +411,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                         </Button>
                         <Button
                           type="button"
-                          variant="ghost"
+                          variant="default" // Changed from ghost
                           size="icon"
                           onClick={() => removeInstruction(index)}
                           className="text-muted-foreground hover:text-destructive h-7 w-7" 
@@ -422,7 +422,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                         </Button>
                          <Button
                           type="button"
-                          variant="ghost"
+                          variant="default" // Changed from ghost
                           size="icon"
                           onClick={() => swapInstruction(index, index + 1)}
                           disabled={index === instructionFields.length - 1 || !!isSaving || !!isScanningRecipe || isScanDialogValidOpen}
@@ -436,7 +436,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                   ))}
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="default" // Changed from outline
                     size="sm"
                     onClick={() => appendInstruction('')}
                     className="mt-2"
@@ -448,10 +448,10 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                 </div>
               </fieldset>
               <DialogFooter className="pt-4">
-                <Button type="button" variant="outline" onClick={handleCloseMainDialog} className="mr-2" disabled={isSaving || isScanningRecipe}>
+                <Button type="button" variant="default" onClick={handleCloseMainDialog} className="mr-2" disabled={isSaving || isScanningRecipe}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={isSaving || isSuggestingName || isScanningRecipe || isScanDialogValidOpen}>
+                <Button type="submit" variant="default" disabled={isSaving || isSuggestingName || isScanningRecipe || isScanDialogValidOpen}>
                   {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : recipeToEdit ? 'Save Changes' : 'Save Recipe'}
                 </Button>
               </DialogFooter>
@@ -492,11 +492,12 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
             </p>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={handleCloseScanDialog} className="mr-2" disabled={isScanningRecipe}>
+            <Button type="button" variant="default" onClick={handleCloseScanDialog} className="mr-2" disabled={isScanningRecipe}>
               Cancel
             </Button>
             <Button
               type="button"
+              variant="default"
               onClick={handleScanRecipeImage}
               disabled={!selectedImageFile || isScanningRecipe}
             >
@@ -513,5 +514,3 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
     </>
   );
 }
-
-    
