@@ -4,15 +4,16 @@
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import type { Recipe } from '@/lib/types';
-import { Trash2 } from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react'; // Added Pencil
 import { Badge } from '@/components/ui/badge';
 
 interface RecipeCardProps {
   recipe: Recipe;
   onDelete: (recipeId: string) => void;
+  onEdit: (recipeId: string) => void; // New prop for editing
 }
 
-export function RecipeCard({ recipe, onDelete }: RecipeCardProps) {
+export function RecipeCard({ recipe, onDelete, onEdit }: RecipeCardProps) {
   // Ensure instructions are always an array to handle old data formats
   const instructionsArray = Array.isArray(recipe.instructions)
     ? recipe.instructions
@@ -54,7 +55,16 @@ export function RecipeCard({ recipe, onDelete }: RecipeCardProps) {
           )}
         </div>
       </CardContent>
-      <CardFooter className="p-6 border-t bg-card">
+      <CardFooter className="p-6 border-t bg-card flex gap-2"> {/* Added flex and gap for multiple buttons */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onEdit(recipe.id)}
+          className="w-full"
+          aria-label={`Edit recipe ${recipe.title}`}
+        >
+          <Pencil className="mr-2 h-4 w-4" /> Edit
+        </Button>
         <Button
           variant="destructive"
           size="sm"

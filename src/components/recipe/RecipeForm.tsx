@@ -1,3 +1,4 @@
+
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -19,23 +20,28 @@ import { recipeFormSchema } from '@/lib/schemas';
 import { suggestRecipeName } from '@/ai/flows/suggest-recipe-name';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, PlusCircle, Sparkles, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import type { Recipe } from '@/lib/types'; // Import Recipe type
 
 interface RecipeFormProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (recipeData: RecipeFormData) => void;
+  onSave: (recipeData: RecipeFormData, recipeIdToUpdate?: string) => void; // Modified signature
+  recipeToEdit?: Recipe | null; // New prop to pass recipe data for editing
 }
 
-export function RecipeForm({ isOpen, onClose, onSave }: RecipeFormProps) {
+// Default values for resetting the form
+const defaultFormValues: RecipeFormData = {
+  title: '',
+  ingredients: [{ name: '', quantity: '' }],
+  instructions: [''],
+  cuisine: '',
+};
+
+export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit }: RecipeFormProps) {
   const form = useForm<RecipeFormData>({
     resolver: zodResolver(recipeFormSchema),
-    defaultValues: {
-      title: '',
-      ingredients: [{ name: '', quantity: '' }],
-      instructions: [''], // Default to one empty instruction step
-      cuisine: '',
-    },
+    defaultValues: defaultFormValues,
   });
 
   const { fields: ingredientFields, append: appendIngredient, remove: removeIngredient } = useFieldArray({
@@ -52,11 +58,41 @@ export function RecipeForm({ isOpen, onClose, onSave }: RecipeFormProps) {
   const [isSuggestingName, setIsSuggestingName] = useState(false);
   const [suggestedName, setSuggestedName] = useState('');
 
+  // Effect to reset form when it opens or recipeToEdit changes
+  useEffect(() => {
+    if (isOpen) {
+      if (recipeToEdit) {
+        // Pre-fill form with recipeToEdit data
+        const instructionsArray = Array.isArray(recipeToEdit.instructions)
+          ? recipeToEdit.instructions
+          : typeof recipeToEdit.instructions === 'string' && recipeToEdit.instructions.trim() !== ''
+          ? [recipeToEdit.instructions]
+          : ['']; // Fallback for empty or malformed old instructions
+        
+        form.reset({
+          title: recipeToEdit.title,
+          // Ensure ingredients are mapped with their IDs for react-hook-form to track them if needed,
+          // and for data consistency when saving.
+          ingredients: recipeToEdit.ingredients.map(ing => ({ 
+            id: ing.id, // Keep original ingredient ID
+            name: ing.name, 
+            quantity: ing.quantity 
+          })),
+          instructions: instructionsArray.length > 0 ? instructionsArray : [''],
+          cuisine: recipeToEdit.cuisine || '',
+        });
+        setSuggestedName(''); // Clear any old suggestions
+      } else {
+        // Reset to default values for a new recipe
+        form.reset(defaultFormValues);
+        setSuggestedName('');
+      }
+    }
+  }, [isOpen, recipeToEdit, form]);
+
   const onSubmit = (data: RecipeFormData) => {
-    onSave(data);
-    form.reset();
-    setSuggestedName('');
-    onClose();
+    onSave(data, recipeToEdit?.id); // Pass recipeIdToUpdate if editing
+    onClose(); // Parent will handle closing and clearing editing state
   };
 
   const handleSuggestName = async () => {
@@ -106,27 +142,25 @@ export function RecipeForm({ isOpen, onClose, onSave }: RecipeFormProps) {
   const handleUseSuggestedName = () => {
     if (suggestedName) {
       form.setValue('title', suggestedName);
-      setSuggestedName(''); // Clear suggestion after use
+      setSuggestedName(''); 
     }
   }
 
   const handleCloseDialog = () => {
-    onClose();
-    form.reset({
-        title: '',
-        ingredients: [{ name: '', quantity: '' }],
-        instructions: [''],
-        cuisine: '',
-    });
-    setSuggestedName('');
+    onClose(); 
+    // Form reset is handled by useEffect based on isOpen and recipeToEdit state from parent.
   }
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) { handleCloseDialog(); } }}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto p-6 rounded-lg shadow-xl">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-semibold">Add New Recipe</DialogTitle>
-          <DialogDescription>Fill in the details for your new culinary creation.</DialogDescription>
+          <DialogTitle className="text-2xl font-semibold">
+            {recipeToEdit ? 'Edit Recipe' : 'Add New Recipe'}
+          </DialogTitle>
+          <DialogDescription>
+            {recipeToEdit ? 'Update the details of your recipe.' : 'Fill in the details for your new culinary creation.'}
+          </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -180,6 +214,15 @@ export function RecipeForm({ isOpen, onClose, onSave }: RecipeFormProps) {
                       </FormItem>
                     )}
                   />
+                  {/* Hidden field for ingredient ID, useful if react-hook-form doesn't automatically pick up 'id' from defaultValues into the field object for submission.
+                      Usually, it does, so this might not be strictly necessary but is a safe-guard.
+                      If `ingredients.${index}.id` is part of form values (from reset), it should be submitted.
+                  */}
+                   <FormField
+                    control={form.control}
+                    name={`ingredients.${index}.id`}
+                    render={({ field }) => <input type="hidden" {...field} />}
+                  />
                   <Button
                     type="button"
                     variant="ghost"
@@ -196,7 +239,7 @@ export function RecipeForm({ isOpen, onClose, onSave }: RecipeFormProps) {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => appendIngredient({ name: '', quantity: '' })}
+                onClick={() => appendIngredient({ name: '', quantity: '' })} // New ingredients won't have an 'id' here
                 className="mt-2"
               >
                 <PlusCircle className="mr-2 h-4 w-4" /> Add Ingredient
@@ -254,7 +297,7 @@ export function RecipeForm({ isOpen, onClose, onSave }: RecipeFormProps) {
                     variant="ghost"
                     size="icon"
                     onClick={() => removeInstruction(index)}
-                    className="text-muted-foreground hover:text-destructive mt-1" // Adjusted margin for alignment with textarea
+                    className="text-muted-foreground hover:text-destructive mt-1" 
                     aria-label={`Remove instruction step ${index + 1}`}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -270,7 +313,6 @@ export function RecipeForm({ isOpen, onClose, onSave }: RecipeFormProps) {
               >
                 <PlusCircle className="mr-2 h-4 w-4" /> Add Instruction Step
               </Button>
-               {/* General error message for the instructions array itself (e.g. if it's empty) */}
               <FormMessage>{form.formState.errors.instructions?.message || form.formState.errors.instructions?.root?.message}</FormMessage>
             </div>
 
@@ -278,7 +320,9 @@ export function RecipeForm({ isOpen, onClose, onSave }: RecipeFormProps) {
               <Button type="button" variant="outline" onClick={handleCloseDialog} className="mr-2">
                 Cancel
               </Button>
-              <Button type="submit">Save Recipe</Button>
+              <Button type="submit">
+                {recipeToEdit ? 'Save Changes' : 'Save Recipe'}
+              </Button>
             </DialogFooter>
           </form>
         </Form>
