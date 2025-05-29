@@ -19,7 +19,7 @@ import type { RecipeFormData } from '@/lib/schemas';
 import { recipeFormSchema } from '@/lib/schemas';
 import { suggestRecipeName } from '@/ai/flows/suggest-recipe-name';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Sparkles, Trash2 } from 'lucide-react';
+import { Loader2, PlusCircle, Sparkles, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { Recipe } from '@/lib/types';
 
@@ -49,7 +49,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
     name: 'ingredients',
   });
 
-  const { fields: instructionFields, append: appendInstruction, remove: removeInstruction } = useFieldArray({
+  const { fields: instructionFields, append: appendInstruction, remove: removeInstruction, swap: swapInstruction } = useFieldArray({
     control: form.control,
     name: 'instructions',
   });
@@ -67,11 +67,10 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
           ? [recipeToEdit.instructions]
           : [''];
         
-        // Handle new cuisines array or fallback to old cuisine string for pre-fill
         let cuisineString = '';
         if (recipeToEdit.cuisines && Array.isArray(recipeToEdit.cuisines)) {
           cuisineString = recipeToEdit.cuisines.join(', ');
-        } else if (recipeToEdit.cuisine) { // Fallback for old data model
+        } else if (recipeToEdit.cuisine) { 
           cuisineString = recipeToEdit.cuisine;
         }
 
@@ -102,7 +101,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
 
   const handleSuggestName = async () => {
     const ingredientsValue = form.getValues('ingredients');
-    const cuisineValue = form.getValues('cuisine'); // This is now a comma-separated string of tags
+    const cuisineValue = form.getValues('cuisine'); 
 
     if (!ingredientsValue || ingredientsValue.length === 0 || ingredientsValue.every(ing => !ing.name.trim())) {
       toast({
@@ -126,7 +125,6 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
         setIsSuggestingName(false);
         return;
       }
-      // Pass the comma-separated cuisine string to the AI flow
       const result = await suggestRecipeName({ ingredients: ingredientsString, cuisine: cuisineValue || '' });
       setSuggestedName(result.recipeName);
       toast({
@@ -287,27 +285,51 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                     <FormField
                       control={form.control}
                       name={`instructions.${index}`}
-                      render={({ field }) => (
+                      render={({ field: instructionField }) => ( // Renamed field to avoid conflict
                         <FormItem className="flex-grow">
                           <FormLabel className="text-sm sr-only">Instruction Step {index + 1}</FormLabel>
                           <FormControl>
-                            <Textarea placeholder={`Step ${index + 1}...`} {...field} rows={3} className="text-base py-2 px-3 resize-none" />
+                            <Textarea placeholder={`Step ${index + 1}...`} {...instructionField} rows={3} className="text-base py-2 px-3 resize-none" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removeInstruction(index)}
-                      className="text-muted-foreground hover:text-destructive mt-1" 
-                      aria-label={`Remove instruction step ${index + 1}`}
-                      disabled={isSaving}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <div className="flex flex-col gap-1 mt-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => swapInstruction(index, index - 1)}
+                        disabled={index === 0 || !!isSaving}
+                        className="text-muted-foreground hover:text-primary h-7 w-7"
+                        aria-label={`Move instruction step ${index + 1} up`}
+                      >
+                        <ArrowUp className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeInstruction(index)}
+                        className="text-muted-foreground hover:text-destructive h-7 w-7" 
+                        aria-label={`Remove instruction step ${index + 1}`}
+                        disabled={isSaving}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                       <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => swapInstruction(index, index + 1)}
+                        disabled={index === instructionFields.length - 1 || !!isSaving}
+                        className="text-muted-foreground hover:text-primary h-7 w-7"
+                        aria-label={`Move instruction step ${index + 1} down`}
+                      >
+                        <ArrowDown className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
                 <Button
