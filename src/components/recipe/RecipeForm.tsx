@@ -21,22 +21,21 @@ import { suggestRecipeName } from '@/ai/flows/suggest-recipe-name';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, PlusCircle, Sparkles, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { Recipe } from '@/lib/types'; // Import Recipe type
+import type { Recipe } from '@/lib/types';
 
 interface RecipeFormProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (recipeData: RecipeFormData, recipeIdToUpdate?: string) => Promise<void>; // Modified signature to be async
+  onSave: (recipeData: RecipeFormData, recipeIdToUpdate?: string) => Promise<void>;
   recipeToEdit?: Recipe | null;
-  isSaving?: boolean; // To disable form elements during save
+  isSaving?: boolean;
 }
 
-// Default values for resetting the form
 const defaultFormValues: RecipeFormData = {
   title: '',
   ingredients: [{ name: '', quantity: '' }],
   instructions: [''],
-  cuisine: '',
+  cuisine: '', // Will hold comma-separated tags
 };
 
 export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: RecipeFormProps) {
@@ -68,6 +67,14 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
           ? [recipeToEdit.instructions]
           : [''];
         
+        // Handle new cuisines array or fallback to old cuisine string for pre-fill
+        let cuisineString = '';
+        if (recipeToEdit.cuisines && Array.isArray(recipeToEdit.cuisines)) {
+          cuisineString = recipeToEdit.cuisines.join(', ');
+        } else if (recipeToEdit.cuisine) { // Fallback for old data model
+          cuisineString = recipeToEdit.cuisine;
+        }
+
         form.reset({
           title: recipeToEdit.title,
           ingredients: recipeToEdit.ingredients.map(ing => ({ 
@@ -76,7 +83,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
             quantity: ing.quantity 
           })),
           instructions: instructionsArray.length > 0 ? instructionsArray : [''],
-          cuisine: recipeToEdit.cuisine || '',
+          cuisine: cuisineString,
         });
         setSuggestedName('');
       } else {
@@ -88,19 +95,14 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
 
   const onSubmit = async (data: RecipeFormData) => {
     await onSave(data, recipeToEdit?.id);
-    // Only close if save was successful - parent now handles re-fetching and can keep form open on error
-    // For simplicity, we'll close it. Parent page handles loading states.
     if (!form.formState.isSubmitting && form.formState.isSubmitSuccessful) {
         onClose();
     }
-    // If onSave throws, react-hook-form might not automatically set isSubmitSuccessful.
-    // The parent (HomePage) controls `isLoading` which is passed as `isSaving`.
-    // We rely on parent to handle UI feedback for save status.
   };
 
   const handleSuggestName = async () => {
     const ingredientsValue = form.getValues('ingredients');
-    const cuisineValue = form.getValues('cuisine');
+    const cuisineValue = form.getValues('cuisine'); // This is now a comma-separated string of tags
 
     if (!ingredientsValue || ingredientsValue.length === 0 || ingredientsValue.every(ing => !ing.name.trim())) {
       toast({
@@ -124,6 +126,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
         setIsSuggestingName(false);
         return;
       }
+      // Pass the comma-separated cuisine string to the AI flow
       const result = await suggestRecipeName({ ingredients: ingredientsString, cuisine: cuisineValue || '' });
       setSuggestedName(result.recipeName);
       toast({
@@ -150,7 +153,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
   }
 
   const handleCloseDialog = () => {
-    if (isSaving) return; // Don't close if an operation is in progress
+    if (isSaving) return;
     onClose(); 
   }
 
@@ -167,7 +170,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <fieldset disabled={isSaving} className="space-y-6"> {/* Disable fieldset when saving */}
+            <fieldset disabled={isSaving} className="space-y-6">
               <FormField
                 control={form.control}
                 name="title"
@@ -181,8 +184,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                   </FormItem>
                 )}
               />
-
-              <Button
+               <Button
                 type="button"
                 onClick={handleSuggestName}
                 disabled={isSuggestingName || isSaving}
@@ -269,9 +271,9 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                 name="cuisine"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-base">Cuisine (Optional)</FormLabel>
+                    <FormLabel className="text-base">Cuisine Tags (comma-separated)</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., Italian, Mexican" {...field} className="text-base py-2 px-3"/>
+                      <Input placeholder="e.g., Italian, Quick, Spicy" {...field} className="text-base py-2 px-3"/>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -335,4 +337,3 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
     </Dialog>
   );
 }
-

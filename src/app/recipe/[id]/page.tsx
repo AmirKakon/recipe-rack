@@ -22,6 +22,22 @@ export default function RecipeDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const processFetchedRecipe = (fetchedRecipeData: any): Recipe => {
+    let cuisinesArray: string[] = [];
+    if (fetchedRecipeData.cuisines && Array.isArray(fetchedRecipeData.cuisines)) {
+      cuisinesArray = fetchedRecipeData.cuisines;
+    } else if (typeof fetchedRecipeData.cuisine === 'string' && fetchedRecipeData.cuisine.trim() !== '') {
+      // Fallback for old data model
+      cuisinesArray = [fetchedRecipeData.cuisine.trim()];
+    }
+    
+    return {
+      ...fetchedRecipeData,
+      cuisines: cuisinesArray,
+      cuisine: undefined, // Ensure old cuisine field is not directly used
+    } as Recipe;
+  };
+
   const fetchRecipe = useCallback(async () => {
     if (!id) return;
     setIsLoading(true);
@@ -36,7 +52,7 @@ export default function RecipeDetailPage() {
       }
       const result = await response.json();
       if (result.status === "Success" && result.data) {
-        setRecipe(result.data);
+        setRecipe(processFetchedRecipe(result.data));
       } else {
         throw new Error('Recipe data not found in response.');
       }
@@ -89,8 +105,6 @@ export default function RecipeDetailPage() {
   }
 
   if (!recipe) {
-    // This case should ideally be covered by the error state (e.g. 404)
-    // but as a fallback:
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 text-center">
         <h2 className="text-3xl font-semibold text-foreground mb-3">Recipe Not Found</h2>

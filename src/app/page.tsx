@@ -24,6 +24,22 @@ export default function HomePage() {
   const [errorLoading, setErrorLoading] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
+  const processFetchedRecipe = (recipe: any): Recipe => {
+    let cuisinesArray: string[] = [];
+    if (recipe.cuisines && Array.isArray(recipe.cuisines)) {
+      cuisinesArray = recipe.cuisines;
+    } else if (typeof recipe.cuisine === 'string' && recipe.cuisine.trim() !== '') {
+      // Fallback for old data model: convert single cuisine string to array
+      cuisinesArray = [recipe.cuisine.trim()];
+    }
+    
+    return {
+      ...recipe,
+      cuisines: cuisinesArray,
+      cuisine: undefined, // Ensure old cuisine field is not directly used
+    } as Recipe;
+  };
+  
   const fetchRecipes = useCallback(async () => {
     setIsLoading(true);
     setErrorLoading(null);
@@ -34,7 +50,7 @@ export default function HomePage() {
       }
       const result = await response.json();
       if (result.status === "Success" && result.data && Array.isArray(result.data.recipes)) {
-        setRecipes(result.data.recipes);
+        setRecipes(result.data.recipes.map(processFetchedRecipe));
       } else {
         console.warn("Fetched recipes data is not in the expected format:", result.data);
         setRecipes([]);
@@ -77,35 +93,42 @@ export default function HomePage() {
     }
   };
 
-  const handleSaveRecipe = async (recipeData: RecipeFormData, recipeIdToUpdate?: string) => {
+  const handleSaveRecipe = async (recipeFormData: RecipeFormData, recipeIdToUpdate?: string) => {
     setIsLoading(true);
     try {
       let response;
       let successMessage = '';
 
-      const processedRecipeData = {
-        ...recipeData,
-        ingredients: recipeData.ingredients.map(ing => ({
+      // Transform comma-separated cuisine string from form into an array of tags
+      const cuisineTagsArray = recipeFormData.cuisine 
+        ? recipeFormData.cuisine.split(',').map(tag => tag.trim()).filter(tag => tag) 
+        : [];
+
+      const payloadForBackend = {
+        ...recipeFormData,
+        ingredients: recipeFormData.ingredients.map(ing => ({
           id: ing.id || crypto.randomUUID(),
           name: ing.name,
           quantity: ing.quantity,
         })),
+        cuisines: cuisineTagsArray, // Send as an array
+        cuisine: undefined, // Remove the original string field for backend
       };
 
       if (recipeIdToUpdate) {
         response = await fetch(`${API_BASE_URL}/api/recipes/update/${recipeIdToUpdate}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(processedRecipeData),
+          body: JSON.stringify(payloadForBackend),
         });
-        successMessage = `"${processedRecipeData.title}" has been successfully updated.`;
+        successMessage = `"${payloadForBackend.title}" has been successfully updated.`;
       } else {
         response = await fetch(`${API_BASE_URL}/api/recipes/create`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(processedRecipeData),
+          body: JSON.stringify(payloadForBackend),
         });
-        successMessage = `"${processedRecipeData.title}" has been successfully added.`;
+        successMessage = `"${payloadForBackend.title}" has been successfully added.`;
       }
 
       if (!response.ok) {
@@ -113,18 +136,18 @@ export default function HomePage() {
         throw new Error(errorData.message || `Failed to save recipe: ${response.statusText}`);
       }
 
-      await response.json();
+      await response.json(); // Assuming backend returns the created/updated recipe or status
       toast({
         title: recipeIdToUpdate ? 'Recipe Updated!' : 'Recipe Added!',
         description: successMessage,
       });
-      await fetchRecipes();
+      await fetchRecipes(); // Re-fetch to update the list
       handleCloseForm(); 
     } catch (error) {
       console.error("Error saving recipe:", error);
       toast({
         title: 'Save Error',
-        description: error instanceof Error ? error.message : "Could not save the recipe.",
+        description: error instanceof Error ? error.message : "Could not save the recipe. The backend might need to be updated to support cuisine tags.",
         variant: 'destructive',
       });
     } finally {
@@ -177,12 +200,11 @@ export default function HomePage() {
     const lowercasedSearchTerm = searchTerm.toLowerCase();
     return recipes.filter(recipe =>
       recipe.title.toLowerCase().includes(lowercasedSearchTerm) ||
-      (recipe.cuisine && recipe.cuisine.toLowerCase().includes(lowercasedSearchTerm))
+      (recipe.cuisines && recipe.cuisines.some(tag => tag.toLowerCase().includes(lowercasedSearchTerm)))
     );
   }, [recipes, searchTerm]);
 
   const currentYear = useMemo(() => (hasMounted ? new Date().getFullYear().toString() : '...'), [hasMounted]);
-
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -193,11 +215,11 @@ export default function HomePage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <Input
               type="text"
-              placeholder="Search recipes by title or cuisine..."
+              placeholder="Search recipes by title or cuisine tags..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full max-w-md pl-10 shadow-sm"
-              aria-label="Search recipes by title or cuisine"
+              aria-label="Search recipes by title or cuisine tags"
             />
           </div>
         </div>
@@ -235,7 +257,7 @@ export default function HomePage() {
             <Search size={64} className="text-primary mb-6" strokeWidth={1.5} />
             <h2 className="text-3xl font-semibold text-foreground mb-3">No Recipes Found</h2>
             <p className="text-lg text-muted-foreground mb-8 max-w-md">
-              No recipes match your search term "{searchTerm}" for title or cuisine. Try a different search.
+              No recipes match your search term "{searchTerm}" for title or cuisine tags. Try a different search.
             </p>
             <Button onClick={() => setSearchTerm('')} size="lg" variant="outline">
               Clear Search

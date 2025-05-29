@@ -30,9 +30,9 @@ export function RecipeList({ recipes, onDeleteRecipe, onEditRecipe }: RecipeList
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[50%] font-semibold text-card-foreground text-base">Title</TableHead>
-            <TableHead className="w-[30%] font-semibold text-card-foreground text-base">Cuisine</TableHead>
-            <TableHead className="text-right font-semibold text-card-foreground text-base">Actions</TableHead>
+            <TableHead className="w-[40%] font-semibold text-card-foreground text-base">Title</TableHead>
+            <TableHead className="w-[40%] font-semibold text-card-foreground text-base">Cuisine Tags</TableHead>
+            <TableHead className="text-right font-semibold text-card-foreground text-base w-[20%]">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -46,8 +46,12 @@ export function RecipeList({ recipes, onDeleteRecipe, onEditRecipe }: RecipeList
                 <span className="hover:underline text-primary">{recipe.title}</span>
               </TableCell>
               <TableCell className="py-3 align-middle">
-                {recipe.cuisine ? (
-                  <Badge variant="secondary">{recipe.cuisine}</Badge>
+                {recipe.cuisines && recipe.cuisines.length > 0 ? (
+                  <div className="flex flex-wrap gap-1">
+                    {recipe.cuisines.map((tag, index) => (
+                      <Badge key={index} variant="secondary">{tag}</Badge>
+                    ))}
+                  </div>
                 ) : (
                   <span className="text-sm text-muted-foreground">N/A</span>
                 )}

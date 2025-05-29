@@ -9,7 +9,6 @@ interface RecipeViewProps {
 }
 
 export function RecipeView({ recipe }: RecipeViewProps) {
-  // Ensure instructions are always an array to handle old data formats or inconsistencies
   const instructionsArray = Array.isArray(recipe.instructions)
     ? recipe.instructions
     : typeof recipe.instructions === 'string' && recipe.instructions.trim() !== ''
@@ -18,16 +17,29 @@ export function RecipeView({ recipe }: RecipeViewProps) {
 
   return (
     <div className="bg-card p-6 sm:p-8 rounded-lg shadow-xl">
-      <div className="flex flex-col sm:flex-row justify-between items-start mb-6 pb-6 border-b border-border">
+      <div className="flex flex-col sm:flex-row justify-between items-start mb-4">
         <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground mb-2 sm:mb-0">
           {recipe.title}
         </h1>
-        {recipe.cuisine && (
-          <Badge variant="secondary" className="text-sm px-3 py-1 shrink-0">
-            {recipe.cuisine}
-          </Badge>
-        )}
       </div>
+
+      {recipe.cuisines && recipe.cuisines.length > 0 && (
+        <div className="mb-6 pb-6 border-b border-border">
+          <h2 className="text-xl font-semibold mb-2 text-foreground">Cuisine Tags:</h2>
+          <div className="flex flex-wrap gap-2">
+            {recipe.cuisines.map((tag, index) => (
+              <Badge key={index} variant="secondary" className="text-sm px-3 py-1">
+                {tag}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+      
+      {!recipe.cuisines || recipe.cuisines.length === 0 && (
+         <div className="mb-6 pb-6 border-b border-border"></div>
+      )}
+
 
       <div className="mb-8">
         <h2 className="text-2xl font-semibold mb-3 text-foreground">Ingredients:</h2>

@@ -1,3 +1,4 @@
+
 import { z } from 'zod';
 
 export const ingredientSchema = z.object({
@@ -14,7 +15,8 @@ export const recipeFormSchema = z.object({
       .min(1, "Instruction step cannot be empty.")
       .max(1000, "Instruction step is too long (max 1000 characters).")
   ).min(1, "At least one instruction step is required."),
-  cuisine: z.string().max(50, "Cuisine name too long").optional(),
+  // 'cuisine' field in form will store comma-separated tags
+  cuisine: z.string().max(200, "Cuisine tags string too long (max 200 characters)").optional(), 
 });
 
 export type RecipeFormData = z.infer<typeof recipeFormSchema>;
