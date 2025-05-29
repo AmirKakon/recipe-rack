@@ -5,6 +5,7 @@ import type { Recipe } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Pencil, Trash2 } from 'lucide-react';
+import Link from 'next/link';
 
 interface RecipeListProps {
   recipes: Recipe[];
@@ -14,9 +15,6 @@ interface RecipeListProps {
 
 export function RecipeList({ recipes, onDeleteRecipe, onEditRecipe }: RecipeListProps) {
   if (recipes.length === 0) {
-    // This case should ideally be handled by the parent component (HomePage)
-    // to show a more prominent "No recipes found" or "Empty state" message.
-    // However, returning null here if no recipes to avoid rendering an empty table.
     return null; 
   }
 
@@ -32,7 +30,11 @@ export function RecipeList({ recipes, onDeleteRecipe, onEditRecipe }: RecipeList
         <TableBody>
           {recipes.map((recipe) => (
             <TableRow key={recipe.id} className="hover:bg-muted/50">
-              <TableCell className="font-medium text-card-foreground py-3 align-middle">{recipe.title}</TableCell>
+              <TableCell className="font-medium text-card-foreground py-3 align-middle">
+                <Link href={`/recipe/${recipe.id}`} className="hover:underline text-primary">
+                  {recipe.title}
+                </Link>
+              </TableCell>
               <TableCell className="text-right py-3 align-middle">
                 <Button
                   variant="ghost"
