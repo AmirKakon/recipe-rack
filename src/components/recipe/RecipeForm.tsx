@@ -23,8 +23,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, PlusCircle, Sparkles, Trash2, ArrowUp, ArrowDown, UploadCloud, ScanEye } from 'lucide-react';
 import { useEffect, useState, useRef } from 'react';
 import type { Recipe } from '@/lib/types';
-import Image from 'next/image'; // For image preview
-import { Label } from '@/components/ui/label'; // Ensure Label is imported
+import Image from 'next/image';
+import { Label } from '@/components/ui/label';
 
 interface RecipeFormProps {
   isOpen: boolean;
@@ -61,19 +61,24 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
   const [isSuggestingName, setIsSuggestingName] = useState(false);
   const [suggestedName, setSuggestedName] = useState('');
 
+  const [isScanDialogValidOpen, setIsScanDialogValidOpen] = useState(false);
   const [isScanningRecipe, setIsScanningRecipe] = useState(false);
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
   const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const resetScanImageState = () => {
+    setSelectedImageFile(null);
+    setSelectedImagePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   useEffect(() => {
     if (isOpen) {
-      setSelectedImageFile(null);
-      setSelectedImagePreview(null);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      resetScanImageState();
+      setIsScanDialogValidOpen(false); // Ensure scan dialog is closed when main form opens
 
       if (recipeToEdit) {
         const instructionsArray = Array.isArray(recipeToEdit.instructions)
@@ -92,7 +97,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
         form.reset({
           title: recipeToEdit.title,
           ingredients: recipeToEdit.ingredients.map(ing => ({ 
-            id: ing.id || crypto.randomUUID(), // Ensure ID exists for existing items
+            id: ing.id || crypto.randomUUID(),
             name: ing.name, 
             quantity: ing.quantity 
           })),
@@ -110,7 +115,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
   const onSubmit = async (data: RecipeFormData) => {
     await onSave(data, recipeToEdit?.id);
      if (!form.formState.isSubmitting && form.formState.isSubmitSuccessful) {
-        onClose(); // This will trigger the useEffect to reset image states
+        onClose(); 
     }
   };
 
@@ -192,14 +197,13 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
 
     setIsScanningRecipe(true);
     try {
-      const imageDataUri = selectedImagePreview; // Already a data URI
+      const imageDataUri = selectedImagePreview; 
       const extractedData = await extractRecipeFromImage({ imageDataUri });
 
-      // Populate form with extracted data
-      form.reset({ // reset is better here to also clear existing array fields
+      form.reset({ 
         title: extractedData.title || '',
-        ingredients: (extractedData.ingredients || []).map(ing => ({
-          id: crypto.randomUUID(), // Each ingredient needs a unique ID for useFieldArray
+        ingredients: (extractedData.ingredients && extractedData.ingredients.length > 0 ? extractedData.ingredients : [{ id: crypto.randomUUID(), name: '', quantity: '' }]).map(ing => ({
+          id: ing.id || crypto.randomUUID(), 
           name: ing.name || '',
           quantity: ing.quantity || '',
         })),
@@ -207,19 +211,12 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
         cuisine: extractedData.cuisine || '',
       });
 
-      // Ensure at least one empty ingredient/instruction field if AI returns empty arrays
-      if (!extractedData.ingredients || extractedData.ingredients.length === 0) {
-        form.setValue('ingredients', [{ id: crypto.randomUUID(), name: '', quantity: '' }]);
-      }
-      if (!extractedData.instructions || extractedData.instructions.length === 0) {
-         form.setValue('instructions', ['']);
-      }
-
-
       toast({
         title: 'Recipe Scanned!',
         description: 'Recipe details have been pre-filled. Please review and edit as needed.',
       });
+      setIsScanDialogValidOpen(false); // Close scan dialog on success
+      resetScanImageState(); // Clear image selection
     } catch (error) {
       console.error('Error scanning recipe image:', error);
       toast({
@@ -231,38 +228,258 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
       setIsScanningRecipe(false);
     }
   };
-
-  const handleCloseDialog = () => {
-    if (isSaving || isScanningRecipe) return;
+  
+  const handleCloseMainDialog = () => {
+    if (isSaving) return; // Prevent closing if main form is saving
+    resetScanImageState();
+    setIsScanDialogValidOpen(false);
     onClose(); 
   }
 
+  const handleCloseScanDialog = () => {
+    if (isScanningRecipe) return; // Prevent closing if scan is in progress
+    resetScanImageState();
+    setIsScanDialogValidOpen(false);
+  }
+
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) { handleCloseDialog(); } }}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto p-6 rounded-lg shadow-xl">
-        <DialogHeader>
-          <DialogTitle className="text-2xl font-semibold">
-            {recipeToEdit ? 'Edit Recipe' : 'Add New Recipe'}
-          </DialogTitle>
-          <DialogDescription>
-            {recipeToEdit ? 'Update the details of your recipe.' : 'Fill in the details for your new culinary creation, or upload an image to scan.'}
-          </DialogDescription>
-        </DialogHeader>
-        
-        {/* Image Upload and Scan Section */}
-        <div className="space-y-4 my-4 p-4 border rounded-md bg-secondary/30">
-          <h3 className="text-lg font-medium text-foreground">Scan Recipe from Image (Optional)</h3>
-          <div className="grid sm:grid-cols-2 gap-4 items-center">
+    <>
+      <Dialog open={isOpen} onOpenChange={(open) => { if (!open) { handleCloseMainDialog(); } }}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto p-6 rounded-lg shadow-xl">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-semibold">
+              {recipeToEdit ? 'Edit Recipe' : 'Add New Recipe'}
+            </DialogTitle>
+            <DialogDescription>
+              {recipeToEdit ? 'Update the details of your recipe.' : 'Fill in the details for your new culinary creation.'}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <fieldset disabled={isSaving || isScanningRecipe} className="space-y-6">
+                <FormField
+                  control={form.control}
+                  name="title"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-base">Title</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., Grandma's Apple Pie" {...field} className="text-base py-2 px-3" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div className="space-y-2">
+                   <Button
+                    type="button"
+                    onClick={handleSuggestName}
+                    disabled={isSuggestingName || isSaving || isScanningRecipe || isScanDialogValidOpen}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    {isSuggestingName ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="mr-2 h-4 w-4" />
+                    )}
+                    Suggest Recipe Title with AI
+                  </Button>
+                  
+                  {suggestedName && (
+                    <div className="p-3 bg-accent/10 border border-accent/30 rounded-md flex items-center justify-between">
+                      <p className="text-sm">Suggested: <span className="font-semibold">{suggestedName}</span></p>
+                      <Button type="button" size="sm" onClick={handleUseSuggestedName} disabled={isSaving || isSuggestingName || isScanningRecipe || isScanDialogValidOpen}>Use this name</Button>
+                    </div>
+                  )}
+                </div>
+
+                <Button
+                  type="button"
+                  onClick={() => setIsScanDialogValidOpen(true)}
+                  disabled={isSaving || isSuggestingName || isScanningRecipe || isScanDialogValidOpen}
+                  variant="outline"
+                  className="w-full"
+                >
+                  <ScanEye className="mr-2 h-4 w-4" />
+                  Scan Recipe from Image with AI
+                </Button>
+                
+                <FormField
+                  control={form.control}
+                  name="cuisine"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-base">Cuisine Tags (comma-separated)</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., Italian, Quick, Spicy" {...field} className="text-base py-2 px-3"/>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div>
+                  <FormLabel className="text-base">Ingredients</FormLabel>
+                  {ingredientFields.map((field, index) => (
+                    <div key={field.id} className="flex items-end gap-2 mt-2 mb-3 p-3 border rounded-md bg-secondary/30">
+                      <FormField
+                        control={form.control}
+                        name={`ingredients.${index}.name`}
+                        render={({ field }) => (
+                          <FormItem className="flex-grow">
+                            <FormLabel className="text-sm sr-only">Ingredient Name</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Ingredient Name" {...field} className="text-sm py-1.5 px-2"/>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name={`ingredients.${index}.quantity`}
+                        render={({ field }) => (
+                          <FormItem className="w-1/3">
+                             <FormLabel className="text-sm sr-only">Quantity</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Quantity (e.g., 2 cups)" {...field} className="text-sm py-1.5 px-2"/>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                       <FormField
+                        control={form.control}
+                        name={`ingredients.${index}.id`}
+                        render={({ field }) => <input type="hidden" {...field} />}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeIngredient(index)}
+                        className="text-muted-foreground hover:text-destructive"
+                        aria-label="Remove ingredient"
+                        disabled={isSaving || isScanningRecipe || isScanDialogValidOpen}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => appendIngredient({ id: crypto.randomUUID(), name: '', quantity: '' })}
+                    className="mt-2"
+                    disabled={isSaving || isScanningRecipe || isScanDialogValidOpen}
+                  >
+                    <PlusCircle className="mr-2 h-4 w-4" /> Add Ingredient
+                  </Button>
+                </div>
+                
+                <div>
+                  <FormLabel className="text-base">Instructions</FormLabel>
+                  {instructionFields.map((field, index) => (
+                    <div key={field.id} className="flex items-start gap-2 mt-2 mb-3 p-3 border rounded-md bg-secondary/30">
+                      <FormField
+                        control={form.control}
+                        name={`instructions.${index}`}
+                        render={({ field: instructionField }) => ( 
+                          <FormItem className="flex-grow">
+                            <FormLabel className="text-sm sr-only">Instruction Step {index + 1}</FormLabel>
+                            <FormControl>
+                              <Textarea placeholder={`Step ${index + 1}...`} {...instructionField} rows={3} className="text-base py-2 px-3 resize-none" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <div className="flex flex-col gap-1 mt-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => swapInstruction(index, index - 1)}
+                          disabled={index === 0 || !!isSaving || !!isScanningRecipe || isScanDialogValidOpen}
+                          className="text-muted-foreground hover:text-primary h-7 w-7"
+                          aria-label={`Move instruction step ${index + 1} up`}
+                        >
+                          <ArrowUp className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeInstruction(index)}
+                          className="text-muted-foreground hover:text-destructive h-7 w-7" 
+                          aria-label={`Remove instruction step ${index + 1}`}
+                          disabled={isSaving || isScanningRecipe || isScanDialogValidOpen}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                         <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => swapInstruction(index, index + 1)}
+                          disabled={index === instructionFields.length - 1 || !!isSaving || !!isScanningRecipe || isScanDialogValidOpen}
+                          className="text-muted-foreground hover:text-primary h-7 w-7"
+                          aria-label={`Move instruction step ${index + 1} down`}
+                        >
+                          <ArrowDown className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => appendInstruction('')}
+                    className="mt-2"
+                    disabled={isSaving || isScanningRecipe || isScanDialogValidOpen}
+                  >
+                    <PlusCircle className="mr-2 h-4 w-4" /> Add Instruction Step
+                  </Button>
+                  <FormMessage>{form.formState.errors.instructions?.message || form.formState.errors.instructions?.root?.message}</FormMessage>
+                </div>
+              </fieldset>
+              <DialogFooter className="pt-4">
+                <Button type="button" variant="outline" onClick={handleCloseMainDialog} className="mr-2" disabled={isSaving || isScanningRecipe}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isSaving || isSuggestingName || isScanningRecipe || isScanDialogValidOpen}>
+                  {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : recipeToEdit ? 'Save Changes' : 'Save Recipe'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Scan Image Dialog */}
+      <Dialog open={isScanDialogValidOpen} onOpenChange={(open) => { if (!open) { handleCloseScanDialog(); }}}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold">Scan Recipe from Image</DialogTitle>
+            <DialogDescription>
+              Upload an image of a recipe. The AI will attempt to extract the details.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
             <div>
-              <Label htmlFor="recipe-image-upload" className="text-sm font-medium">Upload Image</Label>
+              <Label htmlFor="recipe-image-upload-modal" className="text-sm font-medium">Upload Image</Label>
               <Input
-                id="recipe-image-upload"
+                id="recipe-image-upload-modal"
                 type="file"
                 accept="image/*"
                 onChange={handleImageChange}
                 ref={fileInputRef}
                 className="mt-1 text-sm"
-                disabled={isScanningRecipe || isSaving}
+                disabled={isScanningRecipe}
               />
               {selectedImagePreview && (
                 <div className="mt-3 relative w-full aspect-video rounded-md overflow-hidden border">
@@ -270,219 +487,31 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                 </div>
               )}
             </div>
-             <Button
-                type="button"
-                onClick={handleScanRecipeImage}
-                disabled={!selectedImageFile || isScanningRecipe || isSaving || isSuggestingName}
-                variant="outline"
-                className="w-full sm:w-auto sm:self-end"
-              >
-                {isScanningRecipe ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <ScanEye className="mr-2 h-4 w-4" />
-                )}
-                Scan Image with AI
-              </Button>
+            <p className="text-xs text-muted-foreground">
+              The AI will pre-fill the recipe form with the extracted information. You can review and edit it before saving.
+            </p>
           </div>
-           <p className="text-xs text-muted-foreground">
-            Upload an image of a recipe (e.g., from a cookbook or website). The AI will try to extract the details.
-          </p>
-        </div>
-
-
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <fieldset disabled={isSaving || isScanningRecipe} className="space-y-6">
-              <FormField
-                control={form.control}
-                name="title"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-base">Title</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., Grandma's Apple Pie" {...field} className="text-base py-2 px-3" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="space-y-2">
-                 <Button
-                  type="button"
-                  onClick={handleSuggestName}
-                  disabled={isSuggestingName || isSaving || isScanningRecipe}
-                  variant="outline"
-                  className="w-full"
-                >
-                  {isSuggestingName ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Sparkles className="mr-2 h-4 w-4" />
-                  )}
-                  Suggest Recipe Title with AI
-                </Button>
-                
-                {suggestedName && (
-                  <div className="p-3 bg-accent/10 border border-accent/30 rounded-md flex items-center justify-between">
-                    <p className="text-sm">Suggested: <span className="font-semibold">{suggestedName}</span></p>
-                    <Button type="button" size="sm" onClick={handleUseSuggestedName} disabled={isSaving || isSuggestingName || isScanningRecipe}>Use this name</Button>
-                  </div>
-                )}
-              </div>
-              
-              <FormField
-                control={form.control}
-                name="cuisine"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-base">Cuisine Tags (comma-separated)</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., Italian, Quick, Spicy" {...field} className="text-base py-2 px-3"/>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div>
-                <FormLabel className="text-base">Ingredients</FormLabel>
-                {ingredientFields.map((field, index) => (
-                  <div key={field.id} className="flex items-end gap-2 mt-2 mb-3 p-3 border rounded-md bg-secondary/30">
-                    <FormField
-                      control={form.control}
-                      name={`ingredients.${index}.name`}
-                      render={({ field }) => (
-                        <FormItem className="flex-grow">
-                          <FormLabel className="text-sm sr-only">Ingredient Name</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Ingredient Name" {...field} className="text-sm py-1.5 px-2"/>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name={`ingredients.${index}.quantity`}
-                      render={({ field }) => (
-                        <FormItem className="w-1/3">
-                           <FormLabel className="text-sm sr-only">Quantity</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Quantity (e.g., 2 cups)" {...field} className="text-sm py-1.5 px-2"/>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                     <FormField
-                      control={form.control}
-                      name={`ingredients.${index}.id`}
-                      render={({ field }) => <input type="hidden" {...field} />}
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removeIngredient(index)}
-                      className="text-muted-foreground hover:text-destructive"
-                      aria-label="Remove ingredient"
-                      disabled={isSaving || isScanningRecipe}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => appendIngredient({ id: crypto.randomUUID(), name: '', quantity: '' })}
-                  className="mt-2"
-                  disabled={isSaving || isScanningRecipe}
-                >
-                  <PlusCircle className="mr-2 h-4 w-4" /> Add Ingredient
-                </Button>
-              </div>
-              
-              <div>
-                <FormLabel className="text-base">Instructions</FormLabel>
-                {instructionFields.map((field, index) => (
-                  <div key={field.id} className="flex items-start gap-2 mt-2 mb-3 p-3 border rounded-md bg-secondary/30">
-                    <FormField
-                      control={form.control}
-                      name={`instructions.${index}`}
-                      render={({ field: instructionField }) => ( 
-                        <FormItem className="flex-grow">
-                          <FormLabel className="text-sm sr-only">Instruction Step {index + 1}</FormLabel>
-                          <FormControl>
-                            <Textarea placeholder={`Step ${index + 1}...`} {...instructionField} rows={3} className="text-base py-2 px-3 resize-none" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <div className="flex flex-col gap-1 mt-1">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => swapInstruction(index, index - 1)}
-                        disabled={index === 0 || !!isSaving || !!isScanningRecipe}
-                        className="text-muted-foreground hover:text-primary h-7 w-7"
-                        aria-label={`Move instruction step ${index + 1} up`}
-                      >
-                        <ArrowUp className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeInstruction(index)}
-                        className="text-muted-foreground hover:text-destructive h-7 w-7" 
-                        aria-label={`Remove instruction step ${index + 1}`}
-                        disabled={isSaving || isScanningRecipe}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                       <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => swapInstruction(index, index + 1)}
-                        disabled={index === instructionFields.length - 1 || !!isSaving || !!isScanningRecipe}
-                        className="text-muted-foreground hover:text-primary h-7 w-7"
-                        aria-label={`Move instruction step ${index + 1} down`}
-                      >
-                        <ArrowDown className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => appendInstruction('')}
-                  className="mt-2"
-                  disabled={isSaving || isScanningRecipe}
-                >
-                  <PlusCircle className="mr-2 h-4 w-4" /> Add Instruction Step
-                </Button>
-                <FormMessage>{form.formState.errors.instructions?.message || form.formState.errors.instructions?.root?.message}</FormMessage>
-              </div>
-            </fieldset>
-            <DialogFooter className="pt-4">
-              <Button type="button" variant="outline" onClick={handleCloseDialog} className="mr-2" disabled={isSaving || isScanningRecipe}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isSaving || isSuggestingName || isScanningRecipe}>
-                {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : recipeToEdit ? 'Save Changes' : 'Save Recipe'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={handleCloseScanDialog} className="mr-2" disabled={isScanningRecipe}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleScanRecipeImage}
+              disabled={!selectedImageFile || isScanningRecipe}
+            >
+              {isScanningRecipe ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <ScanEye className="mr-2 h-4 w-4" />
+              )}
+              Scan & Use Data
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
+
+    
