@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Header } from '@/components/layout/Header';
 import { RecipeList } from '@/components/recipe/RecipeList';
 import { RecipeForm } from '@/components/recipe/RecipeForm';
@@ -9,7 +9,8 @@ import type { Recipe } from '@/lib/types';
 import type { RecipeFormData } from '@/lib/schemas';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
-import { CookingPot, ServerCrash } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { CookingPot, ServerCrash, Search } from 'lucide-react';
 
 const API_BASE_URL = 'https://us-central1-recipe-rack-ighp8.cloudfunctions.net/app';
 
@@ -21,6 +22,7 @@ export default function HomePage() {
   const [hasMounted, setHasMounted] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [errorLoading, setErrorLoading] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const fetchRecipes = useCallback(async () => {
     setIsLoading(true);
@@ -34,16 +36,13 @@ export default function HomePage() {
       if (result.status === "Success" && result.data && Array.isArray(result.data.recipes)) {
         setRecipes(result.data.recipes);
       } else {
-        // Handle cases where backend returns success but recipes array is missing or not an array
         console.warn("Fetched recipes data is not in the expected format:", result.data);
-        setRecipes([]); // Set to empty array to avoid errors
-        // Optionally, you could throw an error here as well or set an error state
-        // throw new Error("Recipe data from server was not in the expected format.");
+        setRecipes([]);
       }
     } catch (error) {
       console.error("Error fetching recipes:", error);
       setErrorLoading(error instanceof Error ? error.message : "An unknown error occurred while fetching recipes.");
-      setRecipes([]); // Clear recipes on error
+      setRecipes([]);
       toast({
         title: 'Error Fetching Recipes',
         description: error instanceof Error ? error.message : "Could not load recipes from the server.",
@@ -79,37 +78,32 @@ export default function HomePage() {
   };
 
   const handleSaveRecipe = async (recipeData: RecipeFormData, recipeIdToUpdate?: string) => {
-    setIsLoading(true); // Indicate loading state for save operation
+    setIsLoading(true);
     try {
       let response;
       let successMessage = '';
 
-      // Ensure ingredients have IDs if they don't already (for new ingredients within an existing or new recipe)
-      // The backend services for create/update currently expect the full ingredient objects.
       const processedRecipeData = {
         ...recipeData,
         ingredients: recipeData.ingredients.map(ing => ({
-          id: ing.id || crypto.randomUUID(), // Assign ID if new
+          id: ing.id || crypto.randomUUID(),
           name: ing.name,
           quantity: ing.quantity,
         })),
       };
 
-
       if (recipeIdToUpdate) {
-        // Editing existing recipe
         response = await fetch(`${API_BASE_URL}/api/recipes/update/${recipeIdToUpdate}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(processedRecipeData), // Send processed data
+          body: JSON.stringify(processedRecipeData),
         });
         successMessage = `"${processedRecipeData.title}" has been successfully updated.`;
       } else {
-        // Adding new recipe
         response = await fetch(`${API_BASE_URL}/api/recipes/create`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(processedRecipeData), // Send processed data
+          body: JSON.stringify(processedRecipeData),
         });
         successMessage = `"${processedRecipeData.title}" has been successfully added.`;
       }
@@ -119,12 +113,13 @@ export default function HomePage() {
         throw new Error(errorData.message || `Failed to save recipe: ${response.statusText}`);
       }
 
-      await response.json(); // Process the response, e.g. to get new ID if needed, though we re-fetch
+      await response.json();
       toast({
         title: recipeIdToUpdate ? 'Recipe Updated!' : 'Recipe Added!',
         description: successMessage,
       });
-      await fetchRecipes(); // Re-fetch all recipes to update the list
+      await fetchRecipes();
+      handleCloseForm(); // Close form on successful save
     } catch (error) {
       console.error("Error saving recipe:", error);
       toast({
@@ -133,9 +128,7 @@ export default function HomePage() {
         variant: 'destructive',
       });
     } finally {
-      setIsLoading(false); // Clear loading state for save operation
-      // Closing the form should happen regardless of success/failure if the operation attempted
-      // handleCloseForm(); // Moved to RecipeForm's onSubmit or onClose logic handling
+      setIsLoading(false);
     }
   };
 
@@ -143,7 +136,7 @@ export default function HomePage() {
     const recipeToDelete = recipes.find(r => r.id === recipeId);
     if (!recipeToDelete) return;
 
-    setIsLoading(true); // Indicate loading for delete
+    setIsLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/recipes/delete/${recipeId}`, {
         method: 'DELETE',
@@ -159,7 +152,7 @@ export default function HomePage() {
         title: 'Recipe Deleted',
         description: `"${recipeToDelete.title}" has been removed.`,
       });
-      await fetchRecipes(); // Re-fetch to update list
+      await fetchRecipes();
     } catch (error) {
       console.error("Error deleting recipe:", error);
       toast({
@@ -168,7 +161,7 @@ export default function HomePage() {
         variant: 'destructive',
       });
     } finally {
-      setIsLoading(false); // Clear loading for delete
+      setIsLoading(false);
     }
   };
   
@@ -177,26 +170,51 @@ export default function HomePage() {
     setEditingRecipe(null);
   };
 
+  const filteredRecipes = useMemo(() => {
+    if (!searchTerm) {
+      return recipes;
+    }
+    return recipes.filter(recipe =>
+      recipe.title.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [recipes, searchTerm]);
+
+  const currentYear = hasMounted ? new Date().getFullYear() : '...';
+
+
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Header onAddRecipeClick={handleOpenAddForm} />
       <main className="flex-grow container mx-auto px-0 sm:px-4 py-8">
+        <div className="mb-6 px-4 md:px-0">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Search recipes by title..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full max-w-md pl-10 shadow-sm"
+              aria-label="Search recipes by title"
+            />
+          </div>
+        </div>
+
         {isLoading && recipes.length === 0 && !errorLoading && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4 md:p-8">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="bg-card rounded-lg shadow-md p-6 animate-pulse">
-                <div className="h-8 bg-muted rounded w-3/4 mb-4"></div>
-                <div className="h-4 bg-muted rounded w-1/2 mb-2"></div>
-                <div className="h-4 bg-muted rounded w-1/3 mb-6"></div>
-                <div className="h-4 bg-muted rounded w-full mb-2"></div>
-                <div className="h-4 bg-muted rounded w-full mb-2"></div>
-                <div className="h-4 bg-muted rounded w-3/4"></div>
+           <div className="space-y-4 p-4 md:p-0">
+            {[1, 2, 3, 4, 5].map(i => (
+              <div key={i} className="bg-card rounded-lg shadow-md p-4 animate-pulse flex justify-between items-center">
+                <div className="h-6 bg-muted rounded w-3/4"></div>
+                <div className="flex gap-2">
+                  <div className="h-8 w-16 bg-muted rounded"></div>
+                  <div className="h-8 w-16 bg-muted rounded"></div>
+                </div>
               </div>
             ))}
           </div>
         )}
         {!isLoading && errorLoading && (
-          <div className="flex flex-col items-center justify-center text-center py-20 bg-card rounded-lg shadow-md m-4 md:m-8">
+          <div className="flex flex-col items-center justify-center text-center py-20 bg-card rounded-lg shadow-md m-4 md:m-0">
             <ServerCrash size={64} className="text-destructive mb-6" strokeWidth={1.5} />
             <h2 className="text-3xl font-semibold text-destructive mb-3">Oops! Something went wrong.</h2>
             <p className="text-lg text-muted-foreground mb-8 max-w-md">
@@ -207,8 +225,20 @@ export default function HomePage() {
             </Button>
           </div>
         )}
-        {!isLoading && !errorLoading && recipes.length === 0 && (
-          <div className="flex flex-col items-center justify-center text-center py-20 bg-card rounded-lg shadow-md m-4 md:m-8">
+        {!isLoading && !errorLoading && filteredRecipes.length === 0 && recipes.length > 0 && searchTerm && (
+          <div className="flex flex-col items-center justify-center text-center py-20 bg-card rounded-lg shadow-md m-4 md:m-0">
+            <Search size={64} className="text-primary mb-6" strokeWidth={1.5} />
+            <h2 className="text-3xl font-semibold text-foreground mb-3">No Recipes Found</h2>
+            <p className="text-lg text-muted-foreground mb-8 max-w-md">
+              No recipes match your search term "{searchTerm}". Try a different search.
+            </p>
+            <Button onClick={() => setSearchTerm('')} size="lg" variant="outline">
+              Clear Search
+            </Button>
+          </div>
+        )}
+        {!isLoading && !errorLoading && recipes.length === 0 && !searchTerm && (
+          <div className="flex flex-col items-center justify-center text-center py-20 bg-card rounded-lg shadow-md m-4 md:m-0">
             <CookingPot size={64} className="text-primary mb-6" strokeWidth={1.5} />
             <h2 className="text-3xl font-semibold text-foreground mb-3">Your Recipe Rack is Empty!</h2>
             <p className="text-lg text-muted-foreground mb-8 max-w-md">
@@ -219,9 +249,9 @@ export default function HomePage() {
             </Button>
           </div>
         )}
-        {!errorLoading && recipes.length > 0 && (
+        {!errorLoading && filteredRecipes.length > 0 && (
           <RecipeList 
-            recipes={recipes} 
+            recipes={filteredRecipes} 
             onDeleteRecipe={handleDeleteRecipe}
             onEditRecipe={handleOpenEditForm}
           />
@@ -232,10 +262,10 @@ export default function HomePage() {
         onClose={handleCloseForm}
         onSave={handleSaveRecipe}
         recipeToEdit={editingRecipe}
-        isSaving={isLoading && isFormOpen} // Pass a saving prop to RecipeForm if it needs to disable buttons etc.
+        isSaving={isLoading && isFormOpen}
       />
       <footer className="text-center py-6 border-t border-border text-sm text-muted-foreground">
-        <p>&copy; {hasMounted ? new Date().getFullYear() : '...'} Recipe Rack. Happy Cooking!</p>
+        <p>&copy; {currentYear} Recipe Rack. Happy Cooking!</p>
       </footer>
     </div>
   );

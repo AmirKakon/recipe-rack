@@ -30,7 +30,8 @@ app.get("/api/recipes/get/:id",  async (req, res) => {
 
     return res.status(200).send({ status: "Success", data: recipe });
   } catch (error) {
-    return handleError(res, error, `Failed to get recipe: ${req.params.id}`);
+    console.error("Error getting recipe:", error);
+    res.status(500).send("Error getting recipe");
   }
 });
 
@@ -44,7 +45,8 @@ app.get("/api/recipes/getAll",  async (req, res) => {
       data: recipes,
     });
   } catch (error) {
-    return handleError(res, error, `Failed to get all recipes`);
+    console.error("Error getting all recipes:", error);
+    res.status(500).send("Error getting all recipes");
   }
 });
 
@@ -65,13 +67,10 @@ app.put("/api/recipes/update/:id",  async (req, res) => {
       res
         .status(400)
         .send({ status: "Failed", msg: "Recipe failed to updated" });
-  } catch (error) {
-    return handleError(
-      res,
-      error,
-      `Failed to update recipe: ${req.params.id}`,
-    );
-  }
+      } catch (error) {
+        console.error("Error updating recipe:", error);
+        res.status(500).send("Error updating recipe");
+      }
 });
 
 // Delete a recipe
@@ -88,13 +87,10 @@ app.delete("/api/recipes/delete/:id",  async (req, res) => {
       res
         .status(400)
         .send({ status: "Failed", msg: "Recipe failed to delete" });
-  } catch (error) {
-    return handleError(
-      res,
-      error,
-      `Failed to delete recipe: ${req.params.id}`,
-    );
-  }
+      } catch (error) {
+        console.error("Error deleting recipe:", error);
+        res.status(500).send("Error deleting recipe");
+      }
 });
 
 module.exports = { app };

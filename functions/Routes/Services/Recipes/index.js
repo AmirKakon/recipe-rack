@@ -44,7 +44,7 @@ const getAllRecipes = async () => {
   return {
     recipes: snapshot.docs
       .map((doc) => ({ id: doc.id, ...doc.data() }))
-      .sort((a, b) => a.name.localeCompare(b.name)),
+      .sort((a, b) => a.title.localeCompare(b.title)),
   };
 };
 
