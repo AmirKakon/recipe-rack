@@ -58,7 +58,7 @@ User's request: "{{userInput}}"
 Consider these existing recipes first:
 {{#if existingRecipes.length}}
 {{#each existingRecipes}}
-- Title: "{{title}}", ID: "{{id}}"{{#if cuisines.length}}, Cuisines: {{join cuisines ", "}}{{/if}}
+- Title: "{{title}}", ID: "{{id}}"{{#if cuisines.length}}, Cuisines: {{#each cuisines}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}{{/if}}
 {{/each}}
 {{else}}
 - No existing recipes provided.
