@@ -67,7 +67,7 @@ const prompt = ai.definePrompt({
   name: 'suggestRecipeBasedOnInputPrompt',
   input: {schema: SuggestRecipeBasedOnInputInputSchema},
   output: {schema: SuggestRecipeBasedOnInputOutputSchema},
-  prompt: `You are a helpful culinary assistant. The user wants recipe suggestions based on their input.
+  prompt: `You are a helpful culinary assistant. The user wants recipe suggestions based on their input. These suggestions are for a Jewish family that keeps kosher.
 User's request: "{{userInput}}"
 Prioritize new recipes if 'preferNew' is true: {{preferNew}}
 
@@ -95,6 +95,13 @@ Guidelines:
 -   If 'preferNew' is true, focus on generating new recipe ideas even if there are potential existing matches.
 -   If not 'preferNew', first check if any "existingRecipes" are a strong match for "{{userInput}}". If so, include them.
 -   Then, fill the remaining slots (up to 3 total suggestions) with new recipe ideas based on "{{userInput}}".
+-   **Important for newRecipe suggestions:** All *new* recipe suggestions *must* be kosher-friendly, suitable for a Jewish family that observes kosher dietary laws. This means:
+    *   No pork or shellfish.
+    *   Meat and dairy ingredients should not be mixed in the same dish or recipe.
+    *   If suggesting a meat dish, ensure no dairy is included in its ingredients or preparation.
+    *   If suggesting a dairy dish, ensure no meat is included.
+    *   Pareve (neutral) dishes are also welcome.
+    *   Clearly state in the 'reasoning' for a new recipe that it has been designed to be kosher-friendly.
 -   If you cannot make any sensible suggestions (e.g., input is too vague), return an empty 'suggestions' array and explain why in 'overallReasoning'.
 -   Each suggestion item in the 'suggestions' array must have its own 'reasoning'.
 -   Do not make up existing recipe IDs or titles; only use those provided.
@@ -104,8 +111,8 @@ Guidelines:
 Example of a 'suggestions' item for an existing recipe:
 { "type": "existing", "reasoning": "This existing pasta dish matches your request for something quick and Italian.", "existingRecipe": { "id": "xyz123", "title": "Quick Tomato Pasta" } }
 
-Example of a 'suggestions' item for a new recipe:
-{ "type": "new", "reasoning": "A fresh idea for a spicy chicken stir-fry.", "newRecipe": { "title": "Spicy Chicken and Veggie Stir-fry", "ingredients": [{"name": "Chicken Breast", "quantity": "1 lb"}, {"name": "Broccoli", "quantity": "1 head"}], "instructions": ["Cut chicken...", "Stir-fry veggies..."], "cuisine": "Asian, Spicy", "prepTime": "15 mins", "cookTime": "20 mins", "servingSize": "2 servings" } }
+Example of a 'suggestions' item for a new recipe (kosher-friendly):
+{ "type": "new", "reasoning": "A fresh idea for a kosher-friendly chicken stir-fry. This recipe avoids dairy and uses only kosher ingredients.", "newRecipe": { "title": "Kosher Chicken and Veggie Stir-fry", "ingredients": [{"name": "Chicken Breast", "quantity": "1 lb"}, {"name": "Broccoli", "quantity": "1 head"}], "instructions": ["Cut chicken...", "Stir-fry veggies..."], "cuisine": "Asian, Kosher", "prepTime": "15 mins", "cookTime": "20 mins", "servingSize": "2 servings" } }
 `,
 });
 
