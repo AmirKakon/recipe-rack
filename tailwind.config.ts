@@ -64,7 +64,11 @@ export default {
           'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
           border: 'hsl(var(--sidebar-border))',
           ring: 'hsl(var(--sidebar-ring))'
-        }
+        },
+        yellowPrimary: { // New yellow color
+          DEFAULT: 'hsl(var(--yellow-primary))',
+          foreground: 'hsl(var(--yellow-primary-foreground))'
+        },
       },
       borderRadius: {
         lg: 'var(--radius)',

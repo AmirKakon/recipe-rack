@@ -19,7 +19,7 @@ export function Header({ onAddRecipeClick, onSuggestRecipeClick }: HeaderProps) 
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
           {onSuggestRecipeClick && (
-            <Button onClick={onSuggestRecipeClick} variant="outline" size="lg" className="w-full sm:w-auto">
+            <Button onClick={onSuggestRecipeClick} variant="yellow" size="lg" className="w-full sm:w-auto">
               <Lightbulb className="mr-2 h-5 w-5" />
               Suggest Recipe
             </Button>
@@ -33,5 +33,3 @@ export function Header({ onAddRecipeClick, onSuggestRecipeClick }: HeaderProps) 
     </header>
   );
 }
-
-    
