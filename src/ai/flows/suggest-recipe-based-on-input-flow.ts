@@ -33,7 +33,7 @@ const NewRecipeDetailsSchema = z.object({
   title: z.string().describe("Title for the new recipe. Use '' if not applicable."),
   ingredients: z.array(SuggestedIngredientSchema).describe("Ingredients for the new recipe. Empty array if not applicable or if ingredients cannot be clearly identified."),
   instructions: z.array(z.string()).describe("List of instruction strings for the new recipe. Each string is a single step. Empty array if not applicable or if instructions cannot be clearly identified."),
-  cuisine: z.string().describe("Comma-separated cuisine tags for the new recipe (e.g., 'Italian, Quick'). Use '' if not applicable."),
+  cuisine: z.string().describe("Comma-separated cuisine tags for the new recipe (e.g., 'Italian, Quick'). Use '' if not applicable. Do not include 'Kosher' as a tag here."),
   prepTime: z.string().describe("Suggested prep time for the new recipe (e.g., '20 minutes'). Use '' if not applicable."),
   cookTime: z.string().describe("Suggested cook time for the new recipe (e.g., '45 minutes'). Use '' if not applicable."),
   servingSize: z.string().describe("Suggested serving size for the new recipe (e.g., '4 servings'). Use '' if not applicable."),
@@ -107,12 +107,13 @@ Guidelines:
 -   Do not make up existing recipe IDs or titles; only use those provided.
 -   For 'newRecipe.ingredients', each object must have 'name' and 'quantity'.
 -   For 'newRecipe.instructions', each element must be a string representing a step.
+-   For 'newRecipe.cuisine' tags, list relevant culinary styles (e.g., 'Italian', 'Asian', 'Quick'). Do not include 'Kosher' as a cuisine tag, as all new suggestions are inherently kosher-friendly.
 
 Example of a 'suggestions' item for an existing recipe:
 { "type": "existing", "reasoning": "This existing pasta dish matches your request for something quick and Italian.", "existingRecipe": { "id": "xyz123", "title": "Quick Tomato Pasta" } }
 
 Example of a 'suggestions' item for a new recipe (kosher-friendly):
-{ "type": "new", "reasoning": "A fresh idea for a kosher-friendly chicken stir-fry. This recipe avoids dairy and uses only kosher ingredients.", "newRecipe": { "title": "Kosher Chicken and Veggie Stir-fry", "ingredients": [{"name": "Chicken Breast", "quantity": "1 lb"}, {"name": "Broccoli", "quantity": "1 head"}], "instructions": ["Cut chicken...", "Stir-fry veggies..."], "cuisine": "Asian, Kosher", "prepTime": "15 mins", "cookTime": "20 mins", "servingSize": "2 servings" } }
+{ "type": "new", "reasoning": "A fresh idea for a kosher-friendly chicken stir-fry. This recipe avoids dairy and uses only kosher ingredients.", "newRecipe": { "title": "Chicken and Veggie Stir-fry", "ingredients": [{"name": "Chicken Breast", "quantity": "1 lb"}, {"name": "Broccoli", "quantity": "1 head"}], "instructions": ["Cut chicken...", "Stir-fry veggies..."], "cuisine": "Asian, Stir-fry", "prepTime": "15 mins", "cookTime": "20 mins", "servingSize": "2 servings" } }
 `,
 });
 
