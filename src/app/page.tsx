@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation'; // Added useSearchParams
 import { Header } from '@/components/layout/Header';
 import { RecipeList } from '@/components/recipe/RecipeList';
 import { RecipeForm } from '@/components/recipe/RecipeForm';
@@ -29,6 +29,7 @@ export default function HomePage() {
   const [errorLoading, setErrorLoading] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const router = useRouter();
+  const searchParams = useSearchParams(); // Initialize useSearchParams
 
   // State for AI Recipe Suggestion
   const [isSuggestionDialogOpen, setIsSuggestionDialogOpen] = useState(false);
@@ -94,7 +95,7 @@ export default function HomePage() {
     setIsFormOpen(true);
   };
 
-  const handleOpenEditForm = (recipeId: string) => {
+  const handleOpenEditForm = useCallback((recipeId: string) => {
     const recipeToEdit = recipes.find(r => r.id === recipeId);
     if (recipeToEdit) {
       setEditingRecipe(recipeToEdit);
@@ -102,14 +103,33 @@ export default function HomePage() {
     } else {
       toast({
         title: 'Error',
-        description: 'Could not find the recipe to edit.',
+        description: `Could not find recipe with ID ${recipeId} to edit.`,
         variant: 'destructive',
       });
     }
-  };
+  }, [recipes, toast]); // setEditingRecipe and setIsFormOpen are stable
+
+  // Effect to handle opening edit form from query parameter
+  useEffect(() => {
+    const editId = searchParams.get('editRecipeId');
+    if (editId && recipes.length > 0 && !isFormOpen) { // also check !isFormOpen to avoid loop if form is already open
+      handleOpenEditForm(editId);
+      
+      // Clean the URL by removing editRecipeId query param
+      const currentPathname = '/'; 
+      const newSearchParams = new URLSearchParams(searchParams.toString());
+      newSearchParams.delete('editRecipeId');
+      
+      const queryString = newSearchParams.toString();
+      const newUrl = queryString ? `${currentPathname}?${queryString}` : currentPathname;
+      
+      router.replace(newUrl, { scroll: false });
+    }
+  }, [searchParams, recipes, router, handleOpenEditForm, isFormOpen]);
+
 
   const handleSaveRecipe = async (recipeFormData: RecipeFormData, recipeIdToUpdate?: string) => {
-    setIsLoading(true); // Generic loading for save/update
+    setIsLoading(true); 
     try {
       let response;
       let successMessage = '';
@@ -458,5 +478,3 @@ export default function HomePage() {
     </div>
   );
 }
-
-    

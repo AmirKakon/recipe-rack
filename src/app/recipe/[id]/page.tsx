@@ -3,12 +3,11 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { RecipeView } from '@/components/recipe/RecipeView';
 import type { Recipe } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Loader2, ServerCrash, Home } from 'lucide-react';
+import { ArrowLeft, Loader2, ServerCrash, Home, Pencil } from 'lucide-react'; // Added Pencil
 
 const API_BASE_URL = 'https://us-central1-recipe-rack-ighp8.cloudfunctions.net/app';
 
@@ -35,6 +34,9 @@ export default function RecipeDetailPage() {
       ...fetchedRecipeData,
       cuisines: cuisinesArray,
       cuisine: undefined, // Ensure old cuisine field is not directly used
+      prepTime: fetchedRecipeData.prepTime || undefined,
+      cookTime: fetchedRecipeData.cookTime || undefined,
+      servingSize: fetchedRecipeData.servingSize || undefined,
     } as Recipe;
   };
 
@@ -121,10 +123,14 @@ export default function RecipeDetailPage() {
   return (
     <div className="min-h-screen bg-background py-8 sm:py-12">
       <div className="container mx-auto px-4">
-        <div className="mb-8">
+        <div className="mb-8 flex flex-wrap gap-3">
           <Button variant="outline" onClick={() => router.push('/')} className="shadow-sm">
             <ArrowLeft className="mr-2 h-5 w-5" />
             Back to Recipe List
+          </Button>
+          <Button variant="default" onClick={() => router.push(`/?editRecipeId=${recipe.id}`)} className="shadow-sm">
+            <Pencil className="mr-2 h-5 w-5" />
+            Edit Recipe
           </Button>
         </div>
         <RecipeView recipe={recipe} />
