@@ -113,7 +113,7 @@ export default function HomePageClient() {
   }, [recipes, toast]);
 
   useEffect(() => {
-    if (!searchParams || recipes.length === 0) return;
+    if (!searchParams || recipes.length === 0 || !hasMounted) return;
 
     const editId = searchParams.get('editRecipeId');
     if (editId && !isFormOpen) { 
@@ -128,7 +128,7 @@ export default function HomePageClient() {
       
       router.replace(newUrl, { scroll: false });
     }
-  }, [searchParams, recipes, router, handleOpenEditForm, isFormOpen]);
+  }, [searchParams, recipes, router, handleOpenEditForm, isFormOpen, hasMounted]);
 
 
   const handleSaveRecipe = async (recipeFormData: RecipeFormData, recipeIdToUpdate?: string) => {
@@ -249,7 +249,11 @@ export default function HomePageClient() {
       return;
     }
     setIsSuggestingForPage(true);
-    setSuggestionResult(null); // Clear previous results
+    // Do not clear previous results immediately if preferNew is true, to keep the "Try Other Ideas" button visible during loading
+    if (!options.preferNew) {
+        setSuggestionResult(null); 
+    }
+
     try {
       const existingRecipeInfo = recipes.map(r => ({
         id: r.id,
@@ -488,16 +492,18 @@ export default function HomePageClient() {
             )}
           </div>
           <DialogFooter className="sm:justify-between">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => handleGetSuggestion({ preferNew: true })}
-              className="w-full sm:w-auto mb-3 sm:mb-0"
-              disabled={isSuggestingForPage || !suggestionQuery.trim()}
-            >
-               {isSuggestingForPage ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-              Try Other Ideas
-            </Button>
+            {suggestionResult && suggestionResult.suggestions.length > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => handleGetSuggestion({ preferNew: true })}
+                className="w-full sm:w-auto mb-3 sm:mb-0"
+                disabled={isSuggestingForPage || !suggestionQuery.trim()}
+              >
+                {isSuggestingForPage ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                Try Other Ideas
+              </Button>
+            )}
             <div className="flex flex-col sm:flex-row sm:gap-2 w-full sm:w-auto">
                 <Button type="button" variant="ghost" onClick={handleCloseSuggestionDialog} className="w-full sm:w-auto order-2 sm:order-1" disabled={isSuggestingForPage}>
                 Cancel
@@ -522,4 +528,6 @@ export default function HomePageClient() {
     </div>
   );
 }
+    
+
     
