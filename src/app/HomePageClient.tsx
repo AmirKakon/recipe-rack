@@ -13,9 +13,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { CookingPot, ServerCrash, Search, Lightbulb, Loader2 } from 'lucide-react';
-import type { SuggestRecipeBasedOnInputOutput } from '@/ai/flows/suggest-recipe-based-on-input-flow';
+import { Card, CardContent, CardHeader, CardTitle as RecipeSuggestionCardTitle } from '@/components/ui/card'; // Renamed CardTitle to avoid conflict
+import { CookingPot, ServerCrash, Search, Lightbulb, Loader2, RefreshCw } from 'lucide-react';
+import type { SuggestRecipeBasedOnInputOutput, SuggestedRecipeItem } from '@/ai/flows/suggest-recipe-based-on-input-flow';
 import { suggestRecipeBasedOnInput } from '@/ai/flows/suggest-recipe-based-on-input-flow';
+import { Badge } from '@/components/ui/badge';
+
 
 const API_BASE_URL = 'https://us-central1-recipe-rack-ighp8.cloudfunctions.net/app';
 
@@ -240,48 +243,54 @@ export default function HomePageClient() {
     setIsSuggestionDialogOpen(false);
   };
 
-  const handleGetSuggestion = async () => {
+  const handleGetSuggestion = async (options: { preferNew?: boolean } = {}) => {
     if (!suggestionQuery.trim()) {
       toast({ title: "Input Required", description: "Please tell us what you'd like to eat.", variant: "destructive" });
       return;
     }
     setIsSuggestingForPage(true);
-    setSuggestionResult(null);
+    setSuggestionResult(null); // Clear previous results
     try {
       const existingRecipeInfo = recipes.map(r => ({
         id: r.id,
         title: r.title,
         cuisines: r.cuisines || [],
       }));
-      const result = await suggestRecipeBasedOnInput({ userInput: suggestionQuery, existingRecipes: existingRecipeInfo });
+      const result = await suggestRecipeBasedOnInput({ 
+        userInput: suggestionQuery, 
+        existingRecipes: existingRecipeInfo,
+        preferNew: !!options.preferNew,
+      });
       setSuggestionResult(result);
     } catch (error) {
       console.error("Error getting recipe suggestion:", error);
       toast({ title: "Suggestion Error", description: error instanceof Error ? error.message : "Could not get a suggestion.", variant: "destructive" });
-      setSuggestionResult({ suggestionType: 'none', reasoning: 'Failed to connect to the suggestion service. Please try again.' });
+      setSuggestionResult({ suggestions: [], overallReasoning: 'Failed to connect to the suggestion service. Please try again.' });
     } finally {
       setIsSuggestingForPage(false);
     }
   };
 
-  const handleAddSuggestedRecipeToForm = () => {
-    if (!suggestionResult || suggestionResult.suggestionType !== 'new') return;
+  const handleAddSuggestedRecipeToForm = (suggestedItem: SuggestedRecipeItem) => {
+    if (!suggestedItem || suggestedItem.type !== 'new' || !suggestedItem.newRecipe) return;
+    
+    const newRecipeData = suggestedItem.newRecipe;
 
     const recipeToPreFill: Recipe = {
       id: '', 
-      title: suggestionResult.newRecipeTitle || 'Untitled Suggested Recipe',
-      ingredients: suggestionResult.newRecipeIngredients && suggestionResult.newRecipeIngredients.length > 0
-        ? suggestionResult.newRecipeIngredients.map(ing => ({ name: ing.name, quantity: ing.quantity, id: crypto.randomUUID() }))
+      title: newRecipeData.title || 'Untitled Suggested Recipe',
+      ingredients: newRecipeData.ingredients && newRecipeData.ingredients.length > 0
+        ? newRecipeData.ingredients.map(ing => ({ name: ing.name, quantity: ing.quantity, id: crypto.randomUUID() }))
         : [{ name: '', quantity: '', id: crypto.randomUUID() }],
-      instructions: suggestionResult.newRecipeInstructions && suggestionResult.newRecipeInstructions.length > 0
-        ? suggestionResult.newRecipeInstructions
+      instructions: newRecipeData.instructions && newRecipeData.instructions.length > 0
+        ? newRecipeData.instructions
         : [''],
-      cuisines: suggestionResult.newRecipeCuisine
-        ? suggestionResult.newRecipeCuisine.split(',').map(tag => tag.trim()).filter(tag => tag)
+      cuisines: newRecipeData.cuisine
+        ? newRecipeData.cuisine.split(',').map(tag => tag.trim()).filter(tag => tag)
         : [],
-      prepTime: suggestionResult.newRecipePrepTime || '',
-      cookTime: suggestionResult.newRecipeCookTime || '',
-      servingSize: suggestionResult.newRecipeServingSize || '',
+      prepTime: newRecipeData.prepTime || '',
+      cookTime: newRecipeData.cookTime || '',
+      servingSize: newRecipeData.servingSize || '',
     };
 
     setEditingRecipe(recipeToPreFill);
@@ -372,7 +381,7 @@ export default function HomePageClient() {
                 <Button onClick={handleOpenAddForm} size="lg">
                 Let's Cook Up Something!
                 </Button>
-                 <Button onClick={handleOpenSuggestionDialog} size="lg" variant="outline">
+                 <Button onClick={handleOpenSuggestionDialog} size="lg" variant="yellow">
                   <Lightbulb className="mr-2 h-5 w-5" /> Get a Suggestion
                 </Button>
             </div>
@@ -395,11 +404,11 @@ export default function HomePageClient() {
       />
 
       <Dialog open={isSuggestionDialogOpen} onOpenChange={setIsSuggestionDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-xl font-semibold">Get a Recipe Suggestion</DialogTitle>
+            <DialogTitle className="text-2xl font-semibold">Get Recipe Suggestions</DialogTitle>
             <DialogDescription>
-              Tell us what you're in the mood for, and we'll suggest a recipe from your rack or a new idea!
+              Tell us what you're in the mood for. We'll suggest recipes from your rack or new ideas!
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -413,60 +422,96 @@ export default function HomePageClient() {
             {isSuggestingForPage && (
               <div className="flex items-center justify-center text-sm text-muted-foreground">
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Getting a suggestion...
+                Getting suggestions...
               </div>
             )}
             {suggestionResult && (
-              <div className="p-4 border rounded-md bg-muted/50 space-y-3">
-                <p className="text-sm italic text-muted-foreground">AI says: {suggestionResult.reasoning}</p>
-                {suggestionResult.suggestionType === 'existing' && suggestionResult.existingRecipeId && (
-                  <div>
-                    <h4 className="font-semibold">Existing Recipe: {suggestionResult.existingRecipeTitle}</h4>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        router.push(`/recipe/${suggestionResult.existingRecipeId}`);
-                        setIsSuggestionDialogOpen(false);
-                      }}
-                      className="mt-2"
-                    >
-                      View This Recipe
-                    </Button>
+              <div className="space-y-4">
+                <p className="text-md italic text-muted-foreground bg-accent/10 p-3 rounded-md">
+                  <span className="font-semibold">Chef's Note:</span> {suggestionResult.overallReasoning}
+                </p>
+                {suggestionResult.suggestions.length > 0 ? (
+                  <div className="space-y-4">
+                    {suggestionResult.suggestions.map((item, index) => (
+                      <Card key={index} className="shadow-md">
+                        <CardHeader>
+                          <RecipeSuggestionCardTitle className="text-xl">
+                            {item.type === 'existing' ? item.existingRecipe?.title : item.newRecipe?.title}
+                          </RecipeSuggestionCardTitle>
+                          <Badge variant={item.type === 'existing' ? 'secondary' : 'default'} className="w-fit">
+                            {item.type === 'existing' ? 'From Your Rack' : 'New Idea'}
+                          </Badge>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                          <p className="text-sm text-muted-foreground">{item.reasoning}</p>
+                          {item.type === 'new' && item.newRecipe && (
+                            <div className="text-xs space-y-0.5">
+                                {item.newRecipe.cuisine && <p><strong>Cuisine:</strong> {item.newRecipe.cuisine}</p>}
+                                {item.newRecipe.prepTime && <p><strong>Prep:</strong> {item.newRecipe.prepTime}</p>}
+                                {item.newRecipe.cookTime && <p><strong>Cook:</strong> {item.newRecipe.cookTime}</p>}
+                                {item.newRecipe.servingSize && <p><strong>Serves:</strong> {item.newRecipe.servingSize}</p>}
+                            </div>
+                          )}
+                          
+                          {item.type === 'existing' && item.existingRecipe?.id && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                router.push(`/recipe/${item.existingRecipe?.id}`);
+                                setIsSuggestionDialogOpen(false);
+                              }}
+                              className="mt-2"
+                            >
+                              View This Recipe
+                            </Button>
+                          )}
+                          {item.type === 'new' && (
+                            <Button
+                              size="sm"
+                              onClick={() => handleAddSuggestedRecipeToForm(item)}
+                              className="mt-2"
+                            >
+                              Add this to My Rack
+                            </Button>
+                          )}
+                        </CardContent>
+                      </Card>
+                    ))}
                   </div>
-                )}
-                {suggestionResult.suggestionType === 'new' && suggestionResult.newRecipeTitle && (
-                  <div>
-                    <h4 className="font-semibold">New Idea: {suggestionResult.newRecipeTitle}</h4>
-                     {suggestionResult.newRecipeCuisine && <p className="text-xs">Cuisine: {suggestionResult.newRecipeCuisine}</p>}
-                    <Button
-                      size="sm"
-                      onClick={handleAddSuggestedRecipeToForm}
-                      className="mt-2"
-                    >
-                      Add this Recipe to My Rack
-                    </Button>
-                  </div>
-                )}
-                 {suggestionResult.suggestionType === 'none' && !isSuggestingForPage && (
-                  <p className="text-sm text-center text-destructive-foreground bg-destructive p-2 rounded-md">{suggestionResult.reasoning || "No suggestion could be made."}</p>
+                ) : (
+                  !isSuggestingForPage && (
+                    <p className="text-sm text-center text-destructive-foreground bg-destructive p-3 rounded-md">{suggestionResult.overallReasoning || "No suggestions could be made with the current input."}</p>
+                  )
                 )}
               </div>
             )}
           </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={handleCloseSuggestionDialog} className="w-full sm:w-auto" disabled={isSuggestingForPage}>
-              Cancel
-            </Button>
+          <DialogFooter className="sm:justify-between">
             <Button
               type="button"
-              onClick={handleGetSuggestion}
+              variant="outline"
+              onClick={() => handleGetSuggestion({ preferNew: true })}
               className="w-full sm:w-auto mb-3 sm:mb-0"
               disabled={isSuggestingForPage || !suggestionQuery.trim()}
             >
-              {isSuggestingForPage ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Lightbulb className="mr-2 h-4 w-4" />}
-              Get Suggestion
+               {isSuggestingForPage ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+              Try Other Ideas
             </Button>
+            <div className="flex flex-col sm:flex-row sm:gap-2 w-full sm:w-auto">
+                <Button type="button" variant="ghost" onClick={handleCloseSuggestionDialog} className="w-full sm:w-auto order-2 sm:order-1" disabled={isSuggestingForPage}>
+                Cancel
+                </Button>
+                <Button
+                type="button"
+                onClick={() => handleGetSuggestion()}
+                className="w-full sm:w-auto mb-3 sm:mb-0 order-1 sm:order-2"
+                disabled={isSuggestingForPage || !suggestionQuery.trim()}
+                >
+                {isSuggestingForPage ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Lightbulb className="mr-2 h-4 w-4" />}
+                Get Suggestions
+                </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -477,5 +522,4 @@ export default function HomePageClient() {
     </div>
   );
 }
-
     

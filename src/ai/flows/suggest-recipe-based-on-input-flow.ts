@@ -1,7 +1,7 @@
 
 'use server';
 /**
- * @fileOverview Suggests a recipe based on user input, considering existing recipes.
+ * @fileOverview Suggests up to 3 recipes based on user input, considering existing recipes.
  *
  * - suggestRecipeBasedOnInput - A function that handles the recipe suggestion.
  * - SuggestRecipeBasedOnInputInput - The input type.
@@ -20,6 +20,7 @@ const ExistingRecipeInfoSchema = z.object({
 const SuggestRecipeBasedOnInputInputSchema = z.object({
   userInput: z.string().describe('The user\'s textual request for a recipe (e.g., "spicy chicken for dinner", "a quick vegetarian lunch").'),
   existingRecipes: z.array(ExistingRecipeInfoSchema).describe('A list of currently available recipes, each with an ID, title, and optional cuisine tags. The AI should consider these first.'),
+  preferNew: z.boolean().optional().default(false).describe('If true, the AI should prioritize suggesting new recipes rather than existing ones.'),
 });
 export type SuggestRecipeBasedOnInputInput = z.infer<typeof SuggestRecipeBasedOnInputInputSchema>;
 
@@ -28,18 +29,32 @@ const SuggestedIngredientSchema = z.object({
     quantity: z.string().describe("Quantity of the ingredient. Use '' if not applicable or unsure."),
 });
 
+const NewRecipeDetailsSchema = z.object({
+  title: z.string().describe("Title for the new recipe. Use '' if not applicable."),
+  ingredients: z.array(SuggestedIngredientSchema).describe("Ingredients for the new recipe. Empty array if not applicable or if ingredients cannot be clearly identified."),
+  instructions: z.array(z.string()).describe("List of instruction strings for the new recipe. Each string is a single step. Empty array if not applicable or if instructions cannot be clearly identified."),
+  cuisine: z.string().describe("Comma-separated cuisine tags for the new recipe (e.g., 'Italian, Quick'). Use '' if not applicable."),
+  prepTime: z.string().describe("Suggested prep time for the new recipe (e.g., '20 minutes'). Use '' if not applicable."),
+  cookTime: z.string().describe("Suggested cook time for the new recipe (e.g., '45 minutes'). Use '' if not applicable."),
+  servingSize: z.string().describe("Suggested serving size for the new recipe (e.g., '4 servings'). Use '' if not applicable."),
+});
+
+const ExistingRecipeSuggestionSchema = z.object({
+  id: z.string().describe("ID of the existing recipe."),
+  title: z.string().describe("Title of the existing recipe."),
+});
+
+const SuggestedRecipeItemSchema = z.object({
+  type: z.enum(['existing', 'new']).describe("Type of suggestion: 'existing' or 'new'."),
+  reasoning: z.string().describe("Reasoning for this specific suggestion. This must always be populated."),
+  existingRecipe: ExistingRecipeSuggestionSchema.optional().describe("Details if it's an existing recipe suggestion. Present only if type is 'existing'."),
+  newRecipe: NewRecipeDetailsSchema.optional().describe("Details if it's a new recipe suggestion. Present only if type is 'new'."),
+});
+export type SuggestedRecipeItem = z.infer<typeof SuggestedRecipeItemSchema>;
+
 const SuggestRecipeBasedOnInputOutputSchema = z.object({
-  suggestionType: z.enum(['existing', 'new', 'none']).describe("Type of suggestion: 'existing' if a matching existing recipe is found from the provided list, 'new' if a new recipe is generated, 'none' if no suitable suggestion can be made based on the input."),
-  existingRecipeId: z.string().optional().describe("The ID of the existing recipe, if suggestionType is 'existing'."),
-  existingRecipeTitle: z.string().optional().describe("The title of the existing recipe, if suggestionType is 'existing'."),
-  newRecipeTitle: z.string().optional().describe("The title for the new recipe suggestion, if suggestionType is 'new'. Use '' if not applicable."),
-  newRecipeIngredients: z.array(SuggestedIngredientSchema).optional().describe("List of ingredients for the new recipe, if suggestionType is 'new'. Each ingredient *must* have 'name' (string) and 'quantity' (string) fields. Provide an empty array [] if not applicable or if ingredients cannot be clearly identified."),
-  newRecipeInstructions: z.array(z.string()).optional().describe("List of instruction strings for the new recipe, if suggestionType is 'new'. Each string is a single step. Provide an empty array [] if not applicable or if instructions cannot be clearly identified."),
-  newRecipeCuisine: z.string().optional().describe("Comma-separated cuisine tags for the new recipe (e.g., 'Italian, Quick'), if suggestionType is 'new'. Use '' if not applicable."),
-  newRecipePrepTime: z.string().optional().describe("Suggested prep time for the new recipe (e.g., '20 minutes'), if suggestionType is 'new'. Use '' if not applicable."),
-  newRecipeCookTime: z.string().optional().describe("Suggested cook time for the new recipe (e.g., '45 minutes'), if suggestionType is 'new'. Use '' if not applicable."),
-  newRecipeServingSize: z.string().optional().describe("Suggested serving size for the new recipe (e.g., '4 servings'), if suggestionType is 'new'. Use '' if not applicable."),
-  reasoning: z.string().describe("A brief explanation for why this suggestion was made, or why no suggestion could be made. This should always be populated.")
+  suggestions: z.array(SuggestedRecipeItemSchema).describe("An array of up to 3 recipe suggestions. Can be empty if no suitable suggestions are found."),
+  overallReasoning: z.string().describe("A brief overall explanation for the set of suggestions provided, or why no suggestions could be made if the 'suggestions' array is empty. This must always be populated, even if no suggestions are made.")
 });
 export type SuggestRecipeBasedOnInputOutput = z.infer<typeof SuggestRecipeBasedOnInputOutputSchema>;
 
@@ -52,10 +67,11 @@ const prompt = ai.definePrompt({
   name: 'suggestRecipeBasedOnInputPrompt',
   input: {schema: SuggestRecipeBasedOnInputInputSchema},
   output: {schema: SuggestRecipeBasedOnInputOutputSchema},
-  prompt: `You are a helpful culinary assistant. The user wants a recipe suggestion.
+  prompt: `You are a helpful culinary assistant. The user wants recipe suggestions based on their input.
 User's request: "{{userInput}}"
+Prioritize new recipes if 'preferNew' is true: {{preferNew}}
 
-Consider these existing recipes first:
+Consider these existing recipes first (unless 'preferNew' is true):
 {{#if existingRecipes.length}}
 {{#each existingRecipes}}
 - Title: "{{title}}", ID: "{{id}}"{{#if cuisines.length}}, Cuisines: {{#each cuisines}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}{{/if}}
@@ -64,27 +80,32 @@ Consider these existing recipes first:
 - No existing recipes provided.
 {{/if}}
 
-Your task:
-1.  Analyze the user's request: "{{userInput}}".
-2.  Check if any of the "existingRecipes" (titles provided above) are a very good match for the user's request.
-    - If a strong match is found: Set "suggestionType" to "existing". Populate "existingRecipeId", "existingRecipeTitle" with the matched recipe's details. Provide a "reasoning" explaining why it's a good match. Do NOT populate new recipe fields.
-3.  If no strong match is found in existing recipes, OR if the user's request implies they want something new or different:
-    - Set "suggestionType" to "new".
-    - Generate a NEW recipe concept based on the user's request.
-    - Populate "newRecipeTitle", "newRecipeIngredients" (array of {name, quantity}), "newRecipeInstructions" (array of strings), "newRecipeCuisine" (comma-separated tags), "newRecipePrepTime", "newRecipeCookTime", and "newRecipeServingSize".
-    - Provide a "reasoning" explaining the new recipe idea.
-    - If you generate a new recipe, ensure all 'newRecipe*' fields are populated. Use empty strings or empty arrays for fields if specific details cannot be determined for the new recipe. For ingredients and instructions, if none can be generated, return empty arrays.
-4.  If you cannot make any sensible suggestion (neither existing nor new) based on the user's input (e.g., the input is too vague, unrelated to food, or nonsensical):
-    - Set "suggestionType" to "none".
-    - Provide a "reasoning" explaining why no suggestion could be made (e.g., "The request was a bit too vague, could you provide more details?"). Do NOT populate any other fields.
+Your task is to provide up to 3 diverse recipe suggestions. Each suggestion can be either an existing recipe from the list above or a completely new recipe idea.
 
-Respond strictly with a JSON object matching the output schema.
-The 'reasoning' field MUST always be populated.
-For 'newRecipeIngredients', each object must have 'name' and 'quantity'.
-For 'newRecipeInstructions', each element must be a string representing a step.
-If suggesting a new recipe, and a field like prepTime cannot be estimated, use an empty string "" for it.
-Do not make up existing recipe IDs or titles; only use those provided if making an 'existing' suggestion.
-Prioritize suggesting an existing recipe if it's a good fit. Only suggest 'new' if there's no good existing match or the user clearly wants something new.
+Output Format:
+Respond with a JSON object adhering *strictly* to the schema. The main object should have two keys:
+1.  'suggestions': An array of suggestion items. Each item must be an object with the following fields:
+    *   'type': String, either "existing" or "new".
+    *   'reasoning': String, a brief explanation for *this specific suggestion*. Must always be populated.
+    *   'existingRecipe': (Only if 'type' is "existing") An object with 'id' and 'title' of the matched existing recipe.
+    *   'newRecipe': (Only if 'type' is "new") An object with 'title', 'ingredients' (array of {name, quantity}), 'instructions' (array of strings), 'cuisine' (comma-separated tags), 'prepTime', 'cookTime', and 'servingSize'. Ensure 'ingredients' and 'instructions' are empty arrays if none can be determined for a new idea, rather than null or omitting the field. For other string fields in newRecipe, use "" if a value cannot be determined.
+2.  'overallReasoning': String, a brief overall summary of the suggestions or why no suggestions could be made. Must always be populated.
+
+Guidelines:
+-   If 'preferNew' is true, focus on generating new recipe ideas even if there are potential existing matches.
+-   If not 'preferNew', first check if any "existingRecipes" are a strong match for "{{userInput}}". If so, include them.
+-   Then, fill the remaining slots (up to 3 total suggestions) with new recipe ideas based on "{{userInput}}".
+-   If you cannot make any sensible suggestions (e.g., input is too vague), return an empty 'suggestions' array and explain why in 'overallReasoning'.
+-   Each suggestion item in the 'suggestions' array must have its own 'reasoning'.
+-   Do not make up existing recipe IDs or titles; only use those provided.
+-   For 'newRecipe.ingredients', each object must have 'name' and 'quantity'.
+-   For 'newRecipe.instructions', each element must be a string representing a step.
+
+Example of a 'suggestions' item for an existing recipe:
+{ "type": "existing", "reasoning": "This existing pasta dish matches your request for something quick and Italian.", "existingRecipe": { "id": "xyz123", "title": "Quick Tomato Pasta" } }
+
+Example of a 'suggestions' item for a new recipe:
+{ "type": "new", "reasoning": "A fresh idea for a spicy chicken stir-fry.", "newRecipe": { "title": "Spicy Chicken and Veggie Stir-fry", "ingredients": [{"name": "Chicken Breast", "quantity": "1 lb"}, {"name": "Broccoli", "quantity": "1 head"}], "instructions": ["Cut chicken...", "Stir-fry veggies..."], "cuisine": "Asian, Spicy", "prepTime": "15 mins", "cookTime": "20 mins", "servingSize": "2 servings" } }
 `,
 });
 
@@ -98,12 +119,9 @@ const suggestRecipeBasedOnInputFlow = ai.defineFlow(
     const {output} = await prompt(input);
     // Ensure a valid object matching the schema is always returned
     return output || {
-        suggestionType: 'none',
-        reasoning: 'An unexpected error occurred, and no suggestion could be generated. Please try again.',
-        newRecipeIngredients: [],
-        newRecipeInstructions: []
+        suggestions: [],
+        overallReasoning: 'An unexpected error occurred, and no suggestions could be generated. Please try again.',
     };
   }
 );
-
     
