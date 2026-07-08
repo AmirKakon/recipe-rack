@@ -1,0 +1,22 @@
+# Firebase App Hosting configuration.
+# https://firebase.google.com/docs/app-hosting/configure
+#
+# NOTE: This file wires runtime config for the deployed backend. It references
+# secrets by name only — no secret values live here.
+
+runConfig:
+  # Scale to zero when idle to keep this personal app cheap.
+  minInstances: 0
+  maxInstances: 1
+
+env:
+  # Gemini API key used by the Genkit googleAI() plugin for the server-side
+  # AI flows (recipe suggestions + image/URL/TikTok extraction).
+  # Stored in Cloud Secret Manager. Create/update it with:
+  #   firebase apphosting:secrets:set GEMINI_API_KEY --project recipe-rack-ighp8
+  # Use a real, quota-bearing key (NOT AI Studio's "Default Gemini Key",
+  # which has no quota outside AI Studio).
+  - variable: GEMINI_API_KEY
+    secret: GEMINI_API_KEY
+    availability:
+      - RUNTIME
