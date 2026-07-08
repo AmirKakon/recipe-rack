@@ -125,7 +125,7 @@ const extractRecipeFromTiktokFlow = ai.defineFlow(
   },
   async (input) => {
     const {caption, author} = await fetchTiktokCaption(input.videoUrl);
-    const {output} = await prompt({caption, author}, { model: 'googleai/gemini-2.0-flash' });
+    const {output} = await prompt({caption, author}, { model: 'googleai/gemini-2.5-flash' });
     return output || emptyResult;
   }
 );
