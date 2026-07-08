@@ -68,7 +68,7 @@ const extractRecipeFromImageFlow = ai.defineFlow(
   },
   async input => {
     // Using Gemini 2.0 Flash as it supports multimodal input.
-    const {output} = await prompt(input, { model: 'googleai/gemini-2.0-flash' });
+    const {output} = await prompt(input, { model: 'googleai/gemini-2.5-flash' });
     // If output is null/undefined (e.g. model error or schema validation failed upstream in prompt),
     // return a default structure that matches the schema to prevent downstream errors.
     return output || { 

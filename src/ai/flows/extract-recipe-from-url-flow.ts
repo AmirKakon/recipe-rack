@@ -60,7 +60,7 @@ const extractRecipeFromUrlFlow = ai.defineFlow(
   },
   async (input) => {
     // Using Gemini 2.0 Flash, hoping it can handle URL fetching or that Genkit/plugin does.
-    const {output} = await prompt(input, { model: 'googleai/gemini-2.0-flash' });
+    const {output} = await prompt(input, { model: 'googleai/gemini-2.5-flash' });
     return output || { 
       title: '', 
       ingredients: [], 
