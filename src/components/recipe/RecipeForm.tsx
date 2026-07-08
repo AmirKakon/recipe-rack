@@ -21,9 +21,10 @@ import { suggestRecipeName } from '@/ai/flows/suggest-recipe-name';
 import { extractRecipeFromImage } from '@/ai/flows/extract-recipe-from-image-flow.ts';
 import type { ExtractRecipeFromImageOutput } from '@/ai/schemas/recipe-extraction-schemas'; // Updated import path
 import { extractRecipeFromUrl } from '@/ai/flows/extract-recipe-from-url-flow.ts';
+import { extractRecipeFromTiktok } from '@/ai/flows/extract-recipe-from-tiktok-flow.ts';
 import { suggestRecipeDetails } from '@/ai/flows/suggest-recipe-details-flow';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Sparkles, Trash2, ArrowUp, ArrowDown, ScanEye, Wand2, UploadCloud, Link2 } from 'lucide-react';
+import { Loader2, PlusCircle, Sparkles, Trash2, ArrowUp, ArrowDown, ScanEye, Wand2, UploadCloud, Link2, Video, X } from 'lucide-react';
 import { useEffect, useState, useRef } from 'react';
 import type { Recipe } from '@/lib/types';
 import Image from 'next/image';
@@ -49,7 +50,21 @@ const defaultFormValues: RecipeFormData = {
   servingSize: '',
 };
 
-type ScanMode = "file" | "url";
+type ScanMode = "file" | "url" | "tiktok";
+
+interface ScanFile {
+  id: string;
+  file: File;
+  previewUrl: string | null; // data URI for image previews; null for PDFs
+}
+
+const fileToDataUri = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error ?? new Error('Failed to read file.'));
+    reader.readAsDataURL(file);
+  });
 
 export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: RecipeFormProps) {
   const form = useForm<RecipeFormData>({
@@ -78,10 +93,10 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
 
   const [isScanDialogVisible, setIsScanDialogVisible] = useState(false);
   const [isScanningRecipe, setIsScanningRecipe] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [scanFiles, setScanFiles] = useState<ScanFile[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [scanUrl, setScanUrl] = useState('');
+  const [tiktokUrl, setTiktokUrl] = useState('');
   const [activeScanTab, setActiveScanTab] = useState<ScanMode>("file");
 
 
@@ -93,12 +108,12 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
   };
 
   const resetScanInputs = () => {
-    setSelectedFile(null);
-    setFilePreview(null);
+    setScanFiles([]);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
     setScanUrl('');
+    setTiktokUrl('');
     // setActiveScanTab("file"); // Optionally reset tab, or let it persist
   };
 
@@ -274,22 +289,31 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
 
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
+    const files = Array.from(event.target.files ?? []);
+    // Reset the input so picking the same file again (or adding more) still fires onChange.
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    if (files.length === 0) return;
+
+    files.forEach((file) => {
+      const id = crypto.randomUUID();
+      // Add the file immediately; fill in the image preview asynchronously.
+      setScanFiles((prev) => [...prev, { id, file, previewUrl: null }]);
       if (file.type.startsWith('image/')) {
         const reader = new FileReader();
         reader.onloadend = () => {
-          setFilePreview(reader.result as string);
+          setScanFiles((prev) =>
+            prev.map((sf) => (sf.id === id ? { ...sf, previewUrl: reader.result as string } : sf))
+          );
         };
         reader.readAsDataURL(file);
-      } else {
-        setFilePreview(null); 
       }
-    } else {
-      setSelectedFile(null);
-      setFilePreview(null);
-    }
+    });
+  };
+
+  const handleRemoveScanFile = (id: string) => {
+    setScanFiles((prev) => prev.filter((sf) => sf.id !== id));
   };
   
   const populateFormWithScannedData = (extractedData: ExtractRecipeFromImageOutput) => {
@@ -319,56 +343,47 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
     setIsScanningRecipe(true);
     try {
       if (activeScanTab === "file") {
-        if (!selectedFile) {
-          toast({ title: 'No File Selected', description: 'Please select an image or PDF file to scan.', variant: 'destructive' });
-          setIsScanningRecipe(false);
+        if (scanFiles.length === 0) {
+          toast({ title: 'No Files Selected', description: 'Please select one or more images or PDFs to scan.', variant: 'destructive' });
           return;
         }
-        if (!filePreview && selectedFile.type.startsWith('image/')) {
-            toast({ title: 'Image Preview Not Ready', description: 'Please wait for the image preview to load.', variant: 'destructive' });
-            setIsScanningRecipe(false);
-            return;
+
+        let fileDataUris: string[];
+        try {
+          fileDataUris = await Promise.all(scanFiles.map((sf) => fileToDataUri(sf.file)));
+        } catch (readError) {
+          console.error('Error reading files:', readError);
+          toast({ title: 'File Read Error', description: 'Could not read one of the selected files.', variant: 'destructive' });
+          return;
         }
 
-        const reader = new FileReader();
-        reader.onloadend = async () => {
-          const fileDataUri = reader.result as string;
-          try {
-            const extractedData = await extractRecipeFromImage({ fileDataUri });
-            populateFormWithScannedData(extractedData);
-          } catch (aiError) {
-            console.error('Error scanning recipe file (AI processing):', aiError);
-            toast({ title: 'Scanning Error', description: aiError instanceof Error ? aiError.message : 'Failed to extract recipe from file.', variant: 'destructive' });
-          } finally {
-            setIsScanningRecipe(false);
-          }
-        };
-        reader.onerror = () => {
-          console.error('Error reading file:', reader.error);
-          toast({ title: 'File Read Error', description: 'Could not read the selected file.', variant: 'destructive' });
-          setIsScanningRecipe(false);
-        };
-        reader.readAsDataURL(selectedFile);
+        const extractedData = await extractRecipeFromImage({ fileDataUris });
+        populateFormWithScannedData(extractedData);
 
       } else if (activeScanTab === "url") {
         if (!scanUrl.trim() || !URL.canParse(scanUrl)) { // Basic URL validation
           toast({ title: 'Invalid URL', description: 'Please enter a valid URL to scan.', variant: 'destructive' });
-          setIsScanningRecipe(false);
           return;
         }
-        try {
-          const extractedData = await extractRecipeFromUrl({ recipeUrl: scanUrl });
-          populateFormWithScannedData(extractedData);
-        } catch (aiError) {
-          console.error('Error scanning recipe URL (AI processing):', aiError);
-          toast({ title: 'Scanning Error', description: aiError instanceof Error ? aiError.message : 'Failed to extract recipe from URL.', variant: 'destructive' });
-        } finally {
-          setIsScanningRecipe(false);
+        const extractedData = await extractRecipeFromUrl({ recipeUrl: scanUrl });
+        populateFormWithScannedData(extractedData);
+
+      } else if (activeScanTab === "tiktok") {
+        if (!tiktokUrl.trim() || !URL.canParse(tiktokUrl)) {
+          toast({ title: 'Invalid Link', description: 'Please paste a valid TikTok video link.', variant: 'destructive' });
+          return;
         }
+        if (!/tiktok\.com/i.test(tiktokUrl)) {
+          toast({ title: 'Not a TikTok Link', description: 'This does not look like a TikTok URL. Please paste a link from tiktok.com.', variant: 'destructive' });
+          return;
+        }
+        const extractedData = await extractRecipeFromTiktok({ videoUrl: tiktokUrl });
+        populateFormWithScannedData(extractedData);
       }
-    } catch (error) {
-      console.error('Error initiating recipe scan:', error);
-      toast({ title: 'Scanning Error', description: 'Could not start the scanning process.', variant: 'destructive' });
+    } catch (aiError) {
+      console.error('Error scanning recipe (AI processing):', aiError);
+      toast({ title: 'Scanning Error', description: aiError instanceof Error ? aiError.message : 'Failed to extract the recipe. Please try again.', variant: 'destructive' });
+    } finally {
       setIsScanningRecipe(false);
     }
   };
@@ -388,7 +403,12 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
   }
 
   const commonDisabledProps = isSaving || isSuggestingName || isScanningRecipe || isScanDialogVisible || isSuggestingDetails;
-  const isScanButtonDisabled = activeScanTab === 'file' ? !selectedFile : !scanUrl.trim();
+  const isScanButtonDisabled =
+    activeScanTab === 'file'
+      ? scanFiles.length === 0
+      : activeScanTab === 'url'
+      ? !scanUrl.trim()
+      : !tiktokUrl.trim();
 
 
   return (
@@ -693,35 +713,56 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
           <DialogHeader>
             <DialogTitle className="text-xl font-semibold">Scan Recipe Data</DialogTitle>
             <DialogDescription>
-              Upload an image/PDF file or enter a URL. The AI will attempt to extract details.
+              Upload one or more images/PDFs, enter a web URL, or paste a TikTok link. The AI will attempt to extract details.
             </DialogDescription>
           </DialogHeader>
-          
+
           <Tabs value={activeScanTab} onValueChange={(value) => setActiveScanTab(value as ScanMode)} className="w-full mt-4">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="file"><UploadCloud className="mr-2 h-4 w-4"/>From File</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="file"><UploadCloud className="mr-2 h-4 w-4"/>From Files</TabsTrigger>
               <TabsTrigger value="url"><Link2 className="mr-2 h-4 w-4"/>From URL</TabsTrigger>
+              <TabsTrigger value="tiktok"><Video className="mr-2 h-4 w-4"/>From TikTok</TabsTrigger>
             </TabsList>
             <TabsContent value="file" className="space-y-4 py-4">
               <div>
-                <Label htmlFor="recipe-file-upload-modal" className="text-sm font-medium">Upload Image or PDF</Label>
+                <Label htmlFor="recipe-file-upload-modal" className="text-sm font-medium">Upload Images or PDFs</Label>
                 <Input
                   id="recipe-file-upload-modal"
                   type="file"
                   accept="image/*,application/pdf"
+                  multiple
                   onChange={handleFileChange}
                   ref={fileInputRef}
                   className="mt-1 text-sm"
                   disabled={isScanningRecipe}
                 />
-                {filePreview && selectedFile?.type.startsWith('image/') && (
-                  <div className="mt-3 relative w-full aspect-video rounded-md overflow-hidden border">
-                    <Image src={filePreview} alt="Recipe preview" layout="fill" objectFit="contain" data-ai-hint="food cooking" />
-                  </div>
-                )}
-                {selectedFile && !filePreview && selectedFile.type === 'application/pdf' && (
-                  <div className="mt-3 p-3 border rounded-md bg-secondary/30 text-sm text-muted-foreground">
-                    PDF selected: {selectedFile.name} (Preview not available)
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Add multiple photos/pages of the same recipe (e.g. one for ingredients, one for steps).
+                </p>
+                {scanFiles.length > 0 && (
+                  <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {scanFiles.map((sf) => (
+                      <div key={sf.id} className="relative rounded-md overflow-hidden border bg-secondary/30">
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveScanFile(sf.id)}
+                          disabled={isScanningRecipe}
+                          aria-label={`Remove ${sf.file.name}`}
+                          className="absolute top-1 right-1 z-10 rounded-full bg-background/80 p-1 text-muted-foreground hover:text-destructive disabled:opacity-50"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                        {sf.previewUrl ? (
+                          <div className="relative w-full aspect-video">
+                            <Image src={sf.previewUrl} alt={sf.file.name} layout="fill" objectFit="contain" data-ai-hint="food cooking" />
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-center w-full aspect-video p-2 text-center text-xs text-muted-foreground">
+                            {sf.file.type === 'application/pdf' ? 'PDF' : 'File'}: {sf.file.name}
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -740,10 +781,27 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                 />
               </div>
             </TabsContent>
+            <TabsContent value="tiktok" className="space-y-4 py-4">
+              <div>
+                <Label htmlFor="recipe-tiktok-input-modal" className="text-sm font-medium">TikTok Video Link</Label>
+                <Input
+                  id="recipe-tiktok-input-modal"
+                  type="url"
+                  placeholder="https://www.tiktok.com/@creator/video/123..."
+                  value={tiktokUrl}
+                  onChange={(e) => setTiktokUrl(e.target.value)}
+                  className="mt-1 text-sm"
+                  disabled={isScanningRecipe}
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  We read the recipe from the video's caption, so it works best when the creator writes the recipe there.
+                </p>
+              </div>
+            </TabsContent>
           </Tabs>
             <p className="text-xs text-muted-foreground pt-0">
               The AI will pre-fill the recipe form with the extracted information. Review and edit before saving.
-              PDF and URL scanning effectiveness may vary.
+              PDF, URL, and TikTok scanning effectiveness may vary.
             </p>
           <DialogFooter>
             <Button type="button" variant="default" onClick={handleCloseScanDialog} className="w-full sm:w-auto" disabled={isScanningRecipe}>

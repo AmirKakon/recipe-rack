@@ -1,7 +1,7 @@
 
 'use server';
 /**
- * @fileOverview Extracts recipe details from an image or PDF using AI.
+ * @fileOverview Extracts recipe details from one or more images/PDFs using AI.
  *
  * - extractRecipeFromImage - A function that extracts recipe details.
  * - ExtractRecipeFromImageInput - The input type.
@@ -13,10 +13,11 @@ import {z} from 'genkit';
 import { ExtractRecipeFromImageOutputSchema, type ExtractRecipeFromImageOutput } from '@/ai/schemas/recipe-extraction-schemas';
 
 const ExtractRecipeFromImageInputSchema = z.object({
-  fileDataUri: z
-    .string()
+  fileDataUris: z
+    .array(z.string())
+    .min(1)
     .describe(
-      "A photo of a recipe (image/*) or a recipe document (application/pdf), as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
+      "One or more photos of a recipe (image/*) and/or recipe documents (application/pdf), each as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'. Multiple files are treated as different pages/photos of the SAME recipe."
     ),
 });
 export type ExtractRecipeFromImageInput = z.infer<typeof ExtractRecipeFromImageInputSchema>;
@@ -31,7 +32,8 @@ const prompt = ai.definePrompt({
   name: 'extractRecipeFromImagePrompt',
   input: {schema: ExtractRecipeFromImageInputSchema},
   output: {schema: ExtractRecipeFromImageOutputSchema},
-  prompt: `You are an expert recipe extraction AI. Analyze the provided image or PDF document of a recipe.
+  prompt: `You are an expert recipe extraction AI. Analyze the provided image(s) and/or PDF document(s) of a recipe.
+IMPORTANT: When multiple files are provided, treat them as different pages or photos of the SAME single recipe (e.g. one photo may show the ingredients and another the instructions). Merge all the information into one combined recipe. Do not produce multiple recipes.
 Your task is to extract the title, ingredients, instructions, cuisine tags, preparation time, cooking time, and serving size.
 Respond with a JSON object adhering *strictly* to the schema provided.
 
@@ -52,8 +54,10 @@ Detailed Extraction Guidelines:
 - **cookTime**: The cooking time (e.g., "1 hr 15 mins"). Use "" if not explicitly stated or unclear.
 - **servingSize**: The number of servings (e.g., "Serves 4", "Makes 12 cookies"). Use "" if not explicitly stated or unclear.
 
-File to analyze:
-{{media url=fileDataUri}}`,
+File(s) to analyze (all belong to the same recipe):
+{{#each fileDataUris}}
+{{media url=this}}
+{{/each}}`,
 });
 
 const extractRecipeFromImageFlow = ai.defineFlow(
