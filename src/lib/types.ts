@@ -21,5 +21,6 @@ export interface Recipe {
   kosherCategory?: KosherCategory; // meat / dairy / pareve
   isFavorite?: boolean;
   createdAt?: number; // epoch ms, set on create; used for "recently added" sort
+  imageUrl?: string; // Firebase Storage download URL for the recipe photo
 }
 

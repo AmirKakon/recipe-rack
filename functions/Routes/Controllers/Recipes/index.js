@@ -19,6 +19,21 @@ app.post("/api/recipes/create", async (req, res) => {
       }
 });
 
+// Upload a recipe image
+app.post("/api/recipes/uploadImage", async (req, res) => {
+  try {
+    const { imageBase64, contentType } = req.body;
+    if (!imageBase64 || typeof imageBase64 !== "string") {
+      return res.status(400).send("Missing or invalid image data");
+    }
+    const url = await RecipeService.uploadRecipeImage(imageBase64, contentType);
+    return res.status(200).send({ status: "Success", data: { url } });
+  } catch (error) {
+    console.error("Error uploading recipe image:", error);
+    res.status(500).send("Error uploading recipe image");
+  }
+});
+
 // Get a single recipe
 app.get("/api/recipes/get/:id",  async (req, res) => {
   try {

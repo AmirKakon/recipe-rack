@@ -52,6 +52,7 @@ const defaultFormValues: RecipeFormData = {
   cookTime: '',
   servingSize: '',
   kosherCategory: undefined,
+  imageUrl: '',
 };
 
 type ScanMode = "file" | "url" | "tiktok";
@@ -68,6 +69,46 @@ const fileToDataUri = (file: File): Promise<string> =>
     reader.onloadend = () => resolve(reader.result as string);
     reader.onerror = () => reject(reader.error ?? new Error('Failed to read file.'));
     reader.readAsDataURL(file);
+  });
+
+const RECIPE_API_BASE_URL = 'https://us-central1-recipe-rack-ighp8.cloudfunctions.net/app';
+
+// Downscales an image in-browser and returns base64 JPEG data (keeps uploads small).
+const resizeImageToBase64 = (
+  file: File,
+  maxDim = 1280,
+  quality = 0.82
+): Promise<{ base64: string; contentType: string }> =>
+  new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const img = new window.Image(); // window.Image — not the next/image component
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      let { width, height } = img;
+      if (width >= height && width > maxDim) {
+        height = Math.round((height * maxDim) / width);
+        width = maxDim;
+      } else if (height > maxDim) {
+        width = Math.round((width * maxDim) / height);
+        height = maxDim;
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Image processing is not supported in this browser.'));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, width, height);
+      const dataUrl = canvas.toDataURL('image/jpeg', quality);
+      resolve({ base64: dataUrl.split(',')[1] ?? '', contentType: 'image/jpeg' });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Could not read the selected image.'));
+    };
+    img.src = objectUrl;
   });
 
 export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: RecipeFormProps) {
@@ -96,6 +137,8 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
   const [suggestedServingSize, setSuggestedServingSize] = useState('');
 
   const [isClassifyingKosher, setIsClassifyingKosher] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   const [isScanDialogVisible, setIsScanDialogVisible] = useState(false);
   const [isScanningRecipe, setIsScanningRecipe] = useState(false);
@@ -156,6 +199,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
           cookTime: recipeToEdit.cookTime || '',
           servingSize: recipeToEdit.servingSize || '',
           kosherCategory: recipeToEdit.kosherCategory,
+          imageUrl: recipeToEdit.imageUrl || '',
         });
       } else {
         form.reset(defaultFormValues);
@@ -319,6 +363,41 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
     }
   };
 
+  const handleImageChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (imageInputRef.current) imageInputRef.current.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast({ title: 'Invalid File', description: 'Please choose an image file.', variant: 'destructive' });
+      return;
+    }
+
+    setIsUploadingImage(true);
+    try {
+      const { base64, contentType } = await resizeImageToBase64(file);
+      const response = await fetch(`${RECIPE_API_BASE_URL}/api/recipes/uploadImage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: base64, contentType }),
+      });
+      if (!response.ok) throw new Error(`Upload failed: ${response.statusText}`);
+      const result = await response.json();
+      const url = result?.data?.url;
+      if (!url) throw new Error('No image URL was returned.');
+      form.setValue('imageUrl', url, { shouldValidate: true });
+      toast({ title: 'Photo Uploaded!', description: 'The recipe photo has been added.' });
+    } catch (error) {
+      console.error('Error uploading recipe image:', error);
+      toast({ title: 'Upload Error', description: error instanceof Error ? error.message : 'Could not upload the photo.', variant: 'destructive' });
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    form.setValue('imageUrl', '', { shouldValidate: true });
+  };
+
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
@@ -434,13 +513,15 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
     setIsScanDialogVisible(false);
   }
 
-  const commonDisabledProps = isSaving || isSuggestingName || isScanningRecipe || isScanDialogVisible || isSuggestingDetails || isClassifyingKosher;
+  const commonDisabledProps = isSaving || isSuggestingName || isScanningRecipe || isScanDialogVisible || isSuggestingDetails || isClassifyingKosher || isUploadingImage;
   const isScanButtonDisabled =
     activeScanTab === 'file'
       ? scanFiles.length === 0
       : activeScanTab === 'url'
       ? !scanUrl.trim()
       : !tiktokUrl.trim();
+
+  const watchedImageUrl = form.watch('imageUrl');
 
 
   return (
@@ -458,7 +539,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
           
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <fieldset disabled={isSaving || isScanningRecipe || isSuggestingDetails || isClassifyingKosher} className="space-y-6">
+              <fieldset disabled={isSaving || isScanningRecipe || isSuggestingDetails || isClassifyingKosher || isUploadingImage} className="space-y-6">
                 <FormField
                   control={form.control}
                   name="title"
@@ -555,6 +636,58 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                     </FormItem>
                   )}
                 />
+
+                <div className="space-y-2">
+                  <FormLabel className="text-base">Photo</FormLabel>
+                  <input
+                    ref={imageInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    className="hidden"
+                    id="recipe-photo-upload"
+                  />
+                  {watchedImageUrl ? (
+                    <div className="flex items-start gap-3">
+                      <div className="relative w-40 aspect-video rounded-md overflow-hidden border">
+                        <Image src={watchedImageUrl} alt="Recipe photo" fill className="object-cover" sizes="160px" />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => imageInputRef.current?.click()}
+                          disabled={commonDisabledProps}
+                        >
+                          {isUploadingImage ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
+                          Replace
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleRemoveImage}
+                          disabled={commonDisabledProps}
+                          className="text-muted-foreground hover:text-destructive"
+                        >
+                          <X className="mr-2 h-4 w-4" /> Remove
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => imageInputRef.current?.click()}
+                      disabled={commonDisabledProps}
+                      className="w-full sm:w-auto"
+                    >
+                      {isUploadingImage ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
+                      {isUploadingImage ? 'Uploading...' : 'Upload Photo'}
+                    </Button>
+                  )}
+                </div>
 
                 <div className="space-y-1 my-4">
                    <Button

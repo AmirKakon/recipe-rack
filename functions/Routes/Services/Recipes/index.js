@@ -1,6 +1,32 @@
-const { db, logger } = require("../../../setup");
+const { randomUUID } = require("crypto");
+const { getStorage } = require("firebase-admin/storage");
+const { db, logger, STORAGE_BUCKET } = require("../../../setup");
 
 const recipesDB = "recipes";
+
+// Upload a recipe image (base64) to Storage and return a public download URL.
+// Storage is resolved lazily (inside the handler) so module load stays fast.
+const uploadRecipeImage = async (base64Data, contentType) => {
+  const bucket = getStorage().bucket(STORAGE_BUCKET);
+  const buffer = Buffer.from(base64Data, "base64");
+  const extension = (contentType && contentType.split("/")[1]) || "jpg";
+  const token = randomUUID();
+  const filePath = `recipeImages/${randomUUID()}.${extension}`;
+  const file = bucket.file(filePath);
+
+  await file.save(buffer, {
+    metadata: {
+      contentType: contentType || "image/jpeg",
+      // A download token makes the object publicly readable via the Firebase URL
+      // without needing object ACLs (which uniform bucket-level access disables).
+      metadata: { firebaseStorageDownloadTokens: token },
+    },
+  });
+
+  return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(
+    filePath
+  )}?alt=media&token=${token}`;
+};
 
 // Create a recipe
 const createRecipe = async (recipeData) => {
@@ -85,4 +111,5 @@ module.exports = {
   getAllRecipes,
   updateRecipe,
   deleteRecipe,
+  uploadRecipeImage,
 };

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Pencil, Trash2, Star } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
 import { KosherBadge } from '@/components/recipe/KosherBadge';
 import { cn } from '@/lib/utils';
@@ -48,7 +49,12 @@ export function RecipeList({ recipes, onDeleteRecipe, onEditRecipe, onToggleFavo
               onClick={() => handleRowClick(recipe.id)} 
             >
               <TableCell className="font-medium text-card-foreground py-3 align-middle">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
+                  {recipe.imageUrl && (
+                    <div className="relative h-10 w-10 shrink-0 rounded-md overflow-hidden border">
+                      <Image src={recipe.imageUrl} alt="" fill className="object-cover" sizes="40px" />
+                    </div>
+                  )}
                   <span className="hover:underline text-primary">{recipe.title}</span>
                   <KosherBadge category={recipe.kosherCategory} />
                 </div>

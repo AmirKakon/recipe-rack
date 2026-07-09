@@ -21,6 +21,7 @@ export const recipeFormSchema = z.object({
   cookTime: z.string().max(50, "Cook time description too long (e.g., '45 minutes')").optional(),
   servingSize: z.string().max(50, "Serving size description too long (e.g., '4 servings')").optional(),
   kosherCategory: z.enum(['meat', 'dairy', 'pareve']).optional(),
+  imageUrl: z.string().url().optional().or(z.literal('')),
 });
 
 export type RecipeFormData = z.infer<typeof recipeFormSchema>;

@@ -10,12 +10,14 @@ initializeApp();
 
 const app = express();
 
-// Apply the express.json middleware
-app.use(express.json());
+// Allow larger bodies so base64-encoded recipe images can be uploaded.
+app.use(express.json({ limit: "10mb" }));
 
 // Apply the CORS middleware to both app and dev
 app.use(cors({ origin: true }));
 
 const db = getFirestore();
 
-module.exports = { app, functions, logger, db, Timestamp };
+const STORAGE_BUCKET = "recipe-rack-ighp8.firebasestorage.app";
+
+module.exports = { app, functions, logger, db, Timestamp, STORAGE_BUCKET };

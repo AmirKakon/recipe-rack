@@ -2,6 +2,7 @@
 'use client';
 
 import type { Recipe } from '@/lib/types';
+import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
 import { KosherBadge } from '@/components/recipe/KosherBadge';
 import { Clock, UtensilsIcon, Users } from 'lucide-react'; // Added icons
@@ -19,6 +20,18 @@ export function RecipeView({ recipe }: RecipeViewProps) {
 
   return (
     <div className="bg-card p-6 sm:p-8 rounded-lg shadow-xl">
+      {recipe.imageUrl && (
+        <div className="relative w-full aspect-video mb-6 rounded-lg overflow-hidden border border-border">
+          <Image
+            src={recipe.imageUrl}
+            alt={recipe.title}
+            fill
+            className="object-cover"
+            sizes="(max-width: 768px) 100vw, 768px"
+            priority
+          />
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row justify-between items-start mb-6 pb-6 border-b border-border gap-3">
         <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground mb-2 sm:mb-0">
           {recipe.title}
