@@ -19,5 +19,7 @@ export interface Recipe {
   cookTime?: string;
   servingSize?: string;
   kosherCategory?: KosherCategory; // meat / dairy / pareve
+  isFavorite?: boolean;
+  createdAt?: number; // epoch ms, set on create; used for "recently added" sort
 }
 

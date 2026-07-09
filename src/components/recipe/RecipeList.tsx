@@ -4,19 +4,23 @@
 import type { Recipe } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Pencil, Trash2, Star } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { KosherBadge } from '@/components/recipe/KosherBadge';
+import { cn } from '@/lib/utils';
 
 interface RecipeListProps {
   recipes: Recipe[];
   onDeleteRecipe: (recipeId: string) => void;
   onEditRecipe: (recipeId: string) => void;
+  onToggleFavorite: (recipeId: string) => void;
+  onCuisineClick: (tag: string) => void;
+  selectedCuisine: string | null;
 }
 
-export function RecipeList({ recipes, onDeleteRecipe, onEditRecipe }: RecipeListProps) {
-  const router = useRouter(); 
+export function RecipeList({ recipes, onDeleteRecipe, onEditRecipe, onToggleFavorite, onCuisineClick, selectedCuisine }: RecipeListProps) {
+  const router = useRouter();
 
   if (recipes.length === 0) {
     return null; 
@@ -53,7 +57,14 @@ export function RecipeList({ recipes, onDeleteRecipe, onEditRecipe }: RecipeList
                 {recipe.cuisines && recipe.cuisines.length > 0 ? (
                   <div className="flex flex-wrap gap-1">
                     {recipe.cuisines.map((tag, index) => (
-                      <Badge key={index} variant="secondary">{tag}</Badge>
+                      <Badge
+                        key={index}
+                        variant={selectedCuisine === tag ? 'default' : 'secondary'}
+                        className="cursor-pointer"
+                        onClick={(e) => { e.stopPropagation(); onCuisineClick(tag); }}
+                      >
+                        {tag}
+                      </Badge>
                     ))}
                   </div>
                 ) : (
@@ -64,7 +75,23 @@ export function RecipeList({ recipes, onDeleteRecipe, onEditRecipe }: RecipeList
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={(e) => { 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleFavorite(recipe.id);
+                  }}
+                  className={cn(
+                    'mr-2 h-8 w-8',
+                    recipe.isFavorite ? 'text-yellow-500 hover:text-yellow-600' : 'text-muted-foreground hover:text-yellow-500'
+                  )}
+                  aria-label={recipe.isFavorite ? `Unfavorite ${recipe.title}` : `Favorite ${recipe.title}`}
+                  aria-pressed={!!recipe.isFavorite}
+                >
+                  <Star className={cn('h-4 w-4', recipe.isFavorite && 'fill-current')} />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={(e) => {
                     e.stopPropagation();
                     onEditRecipe(recipe.id);
                   }}

@@ -9,13 +9,15 @@ import { RecipeForm } from '@/components/recipe/RecipeForm';
 import type { Recipe, KosherCategory } from '@/lib/types';
 import type { RecipeFormData } from '@/lib/schemas';
 import { KOSHER_CATEGORIES } from '@/lib/kosher';
+import { SORT_OPTIONS, sortRecipes, type SortOption } from '@/lib/recipe-sort';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle as RecipeSuggestionCardTitle } from '@/components/ui/card'; // Renamed CardTitle to avoid conflict
-import { CookingPot, ServerCrash, Search, Lightbulb, Loader2, RefreshCw } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { CookingPot, ServerCrash, Search, Lightbulb, Loader2, RefreshCw, Star } from 'lucide-react';
 import type { SuggestRecipeBasedOnInputOutput, SuggestedRecipeItem } from '@/ai/flows/suggest-recipe-based-on-input-flow';
 import { suggestRecipeBasedOnInput } from '@/ai/flows/suggest-recipe-based-on-input-flow';
 import { Badge } from '@/components/ui/badge';
@@ -33,6 +35,9 @@ export default function HomePageClient() {
   const [errorLoading, setErrorLoading] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [kosherFilter, setKosherFilter] = useState<KosherCategory | 'all'>('all');
+  const [selectedCuisine, setSelectedCuisine] = useState<string | null>(null);
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [sortBy, setSortBy] = useState<SortOption>('title');
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -168,7 +173,7 @@ export default function HomePageClient() {
         response = await fetch(`${API_BASE_URL}/api/recipes/create`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payloadForBackend),
+          body: JSON.stringify({ ...payloadForBackend, createdAt: Date.now() }),
         });
         successMessage = `"${payloadForBackend.title}" has been successfully added.`;
       }
@@ -230,6 +235,44 @@ export default function HomePageClient() {
     }
   };
   
+  const handleToggleFavorite = useCallback(async (recipeId: string) => {
+    const recipe = recipes.find(r => r.id === recipeId);
+    if (!recipe) return;
+
+    const newValue = !recipe.isFavorite;
+    // Optimistic update.
+    setRecipes(prev => prev.map(r => (r.id === recipeId ? { ...r, isFavorite: newValue } : r)));
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/recipes/update/${recipeId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: recipe.title,
+          ingredients: recipe.ingredients,
+          instructions: recipe.instructions,
+          cuisines: recipe.cuisines || [],
+          prepTime: recipe.prepTime || '',
+          cookTime: recipe.cookTime || '',
+          servingSize: recipe.servingSize || '',
+          kosherCategory: recipe.kosherCategory,
+          createdAt: recipe.createdAt,
+          isFavorite: newValue,
+        }),
+      });
+      if (!response.ok) throw new Error(`Failed to update favorite: ${response.statusText}`);
+      await response.json();
+    } catch (error) {
+      // Revert on failure.
+      setRecipes(prev => prev.map(r => (r.id === recipeId ? { ...r, isFavorite: !newValue } : r)));
+      toast({
+        title: 'Could not update favorite',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    }
+  }, [recipes, toast]);
+
   const handleCloseForm = () => {
     setIsFormOpen(false);
     setEditingRecipe(null);
@@ -305,24 +348,39 @@ export default function HomePageClient() {
   };
 
 
+  const allCuisines = useMemo(() => {
+    const set = new Set<string>();
+    recipes.forEach(r => (r.cuisines || []).forEach(tag => tag.trim() && set.add(tag.trim())));
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [recipes]);
+
   const filteredRecipes = useMemo(() => {
     const lowercasedSearchTerm = searchTerm.toLowerCase();
-    return recipes.filter(recipe => {
+    const filtered = recipes.filter(recipe => {
       const matchesSearch =
         !searchTerm ||
         recipe.title.toLowerCase().includes(lowercasedSearchTerm) ||
         (recipe.cuisines && recipe.cuisines.some(tag => tag.toLowerCase().includes(lowercasedSearchTerm)));
       const matchesKosher = kosherFilter === 'all' || recipe.kosherCategory === kosherFilter;
-      return matchesSearch && matchesKosher;
+      const matchesCuisine = !selectedCuisine || (recipe.cuisines || []).includes(selectedCuisine);
+      const matchesFavorite = !favoritesOnly || !!recipe.isFavorite;
+      return matchesSearch && matchesKosher && matchesCuisine && matchesFavorite;
     });
-  }, [recipes, searchTerm, kosherFilter]);
+    return sortRecipes(filtered, sortBy);
+  }, [recipes, searchTerm, kosherFilter, selectedCuisine, favoritesOnly, sortBy]);
 
-  const isFiltering = searchTerm.trim() !== '' || kosherFilter !== 'all';
+  const isFiltering = searchTerm.trim() !== '' || kosherFilter !== 'all' || selectedCuisine !== null || favoritesOnly;
 
   const clearFilters = () => {
     setSearchTerm('');
     setKosherFilter('all');
+    setSelectedCuisine(null);
+    setFavoritesOnly(false);
   };
+
+  const handleToggleCuisineFilter = useCallback((tag: string) => {
+    setSelectedCuisine(prev => (prev === tag ? null : tag));
+  }, []);
 
   const currentYear = useMemo(() => (hasMounted ? new Date().getFullYear().toString() : '...'), [hasMounted]);
 
@@ -363,6 +421,52 @@ export default function HomePageClient() {
                 {cat.label}
               </Button>
             ))}
+          </div>
+
+          {allCuisines.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-muted-foreground mr-1">Cuisine:</span>
+              {allCuisines.map((tag) => (
+                <Badge
+                  key={tag}
+                  variant={selectedCuisine === tag ? 'default' : 'secondary'}
+                  className="cursor-pointer"
+                  onClick={() => handleToggleCuisineFilter(tag)}
+                >
+                  {tag}
+                </Badge>
+              ))}
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              type="button"
+              size="sm"
+              variant={favoritesOnly ? 'default' : 'outline'}
+              onClick={() => setFavoritesOnly((v) => !v)}
+            >
+              <Star className={`mr-1.5 h-4 w-4 ${favoritesOnly ? 'fill-current' : ''}`} />
+              Favorites
+            </Button>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Sort:</span>
+              <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
+                <SelectTrigger className="w-44 h-9 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SORT_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {isFiltering && (
+              <Button type="button" size="sm" variant="ghost" onClick={clearFilters}>
+                Clear filters
+              </Button>
+            )}
           </div>
         </div>
 
@@ -424,10 +528,13 @@ export default function HomePageClient() {
           </div>
         )}
         {!errorLoading && filteredRecipes.length > 0 && (
-          <RecipeList 
-            recipes={filteredRecipes} 
+          <RecipeList
+            recipes={filteredRecipes}
             onDeleteRecipe={handleDeleteRecipe}
             onEditRecipe={handleOpenEditForm}
+            onToggleFavorite={handleToggleFavorite}
+            onCuisineClick={handleToggleCuisineFilter}
+            selectedCuisine={selectedCuisine}
           />
         )}
       </main>
