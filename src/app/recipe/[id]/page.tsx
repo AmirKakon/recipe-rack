@@ -8,7 +8,7 @@ import { RecipeView } from '@/components/recipe/RecipeView';
 import { CookMode } from '@/components/recipe/CookMode';
 import type { Recipe } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Loader2, ServerCrash, Home, Pencil, ChefHat } from 'lucide-react'; // Added Pencil
+import { ArrowLeft, Loader2, ServerCrash, Home, Pencil, ChefHat, Printer } from 'lucide-react'; // Added Pencil
 
 const API_BASE_URL = 'https://us-central1-recipe-rack-ighp8.cloudfunctions.net/app';
 
@@ -125,7 +125,7 @@ export default function RecipeDetailPage() {
   return (
     <div className="min-h-screen bg-background py-8 sm:py-12">
       <div className="container mx-auto px-4">
-        <div className="mb-8 flex flex-wrap gap-3">
+        <div className="mb-8 flex flex-wrap gap-3 print:hidden">
           <Button variant="outline" onClick={() => router.push('/')} className="shadow-sm">
             <ArrowLeft className="mr-2 h-5 w-5" />
             Back to Recipe List
@@ -137,6 +137,10 @@ export default function RecipeDetailPage() {
           <Button variant="yellow" onClick={() => setIsCookModeOpen(true)} className="shadow-sm">
             <ChefHat className="mr-2 h-5 w-5" />
             Cook Mode
+          </Button>
+          <Button variant="outline" onClick={() => window.print()} className="shadow-sm">
+            <Printer className="mr-2 h-5 w-5" />
+            Print
           </Button>
         </div>
         <RecipeView recipe={recipe} />

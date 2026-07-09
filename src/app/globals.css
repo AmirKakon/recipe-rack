@@ -89,3 +89,27 @@
     /* Removed font-family: Arial, Helvetica, sans-serif; to allow Next/font to correctly apply Geist Sans */
   }
 }
+
+@media print {
+  /* Clean, ink-friendly recipe printouts. */
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .shadow-xl,
+  .shadow-md,
+  .shadow-lg,
+  .shadow-sm {
+    box-shadow: none !important;
+  }
+  main,
+  .container {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  li,
+  ol,
+  ul {
+    page-break-inside: avoid;
+  }
+}
