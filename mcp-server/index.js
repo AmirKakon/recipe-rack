@@ -24,6 +24,39 @@ async function api(path, options = {}) {
   return res.json();
 }
 
+// --- Tag normalization (kept in sync with the web app's src/lib/tags.ts) ---
+const SMALL_WORDS = new Set(['and', 'or', 'of', 'the', 'with', 'in', 'a', 'an', 'to', 'for', 'on']);
+const capitalizeWord = (word) =>
+  word
+    .split('-')
+    .map((part) => {
+      if (/^[A-Z]{2,4}$/.test(part)) return part;
+      const lower = part.toLowerCase();
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join('-');
+const normalizeTag = (raw) => {
+  const text = (raw || '').trim().replace(/\s+/g, ' ');
+  if (!text) return '';
+  return text
+    .split(' ')
+    .map((word, i) => (i > 0 && SMALL_WORDS.has(word.toLowerCase()) ? word.toLowerCase() : capitalizeWord(word)))
+    .join(' ');
+};
+const normalizeTags = (tags) => {
+  const seen = new Set();
+  const out = [];
+  for (const raw of tags || []) {
+    const tag = normalizeTag(raw);
+    const key = tag.toLowerCase();
+    if (tag && !seen.has(key)) {
+      seen.add(key);
+      out.push(tag);
+    }
+  }
+  return out;
+};
+
 const normalizeRecipe = (r) => ({
   id: r.id,
   title: r.title,
@@ -35,7 +68,38 @@ const normalizeRecipe = (r) => ({
   cookTime: r.cookTime || '',
   servingSize: r.servingSize || '',
   rating: r.rating || null,
+  notes: r.notes || '',
+  nutrition: r.nutrition || null,
+  imageUrl: r.imageUrl || null,
+  isFavorite: !!r.isFavorite,
 });
+
+const GEMINI_MODEL = 'gemini-2.5-flash';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+
+// Calls Gemini directly (structured JSON output) for the AI tools.
+async function callGemini(prompt, responseSchema) {
+  if (!GEMINI_API_KEY) {
+    throw new Error('AI tools require a GEMINI_API_KEY environment variable on the MCP server.');
+  }
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: { responseMimeType: 'application/json', responseSchema },
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Gemini request failed: ${res.status} ${res.statusText}${body ? ` — ${body}` : ''}`);
+  }
+  const data = await res.json();
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error('Gemini returned no content.');
+  return JSON.parse(text);
+}
 
 const ok = (data) => ({ content: [{ type: 'text', text: typeof data === 'string' ? data : JSON.stringify(data, null, 2) }] });
 
@@ -49,6 +113,12 @@ const guard = (fn) => async (args) => {
 };
 
 const ingredientSchema = z.object({ name: z.string(), quantity: z.string().default('') });
+const nutritionSchema = z.object({
+  calories: z.string().optional(),
+  protein: z.string().optional(),
+  carbs: z.string().optional(),
+  fat: z.string().optional(),
+});
 
 const server = new McpServer({ name: 'recipe-rack', version: '1.0.0' });
 
@@ -103,7 +173,7 @@ server.registerTool(
 server.registerTool(
   'create_recipe',
   {
-    description: 'Create a new recipe.',
+    description: 'Create a new recipe. Cuisine tags are normalized to Title Case automatically.',
     inputSchema: {
       title: z.string(),
       ingredients: z.array(ingredientSchema).min(1),
@@ -113,10 +183,13 @@ server.registerTool(
       prepTime: z.string().optional(),
       cookTime: z.string().optional(),
       servingSize: z.string().optional(),
+      rating: z.number().min(1).max(5).optional(),
+      notes: z.string().optional(),
+      nutrition: nutritionSchema.optional(),
     },
   },
   guard(async (args) => {
-    const payload = { ...args, cuisines: args.cuisines || [], createdAt: Date.now() };
+    const payload = { ...args, cuisines: normalizeTags(args.cuisines || []), createdAt: Date.now() };
     const result = await api('/api/recipes/create', { method: 'POST', body: JSON.stringify(payload) });
     return ok({ created: true, id: result.id });
   })
@@ -125,7 +198,7 @@ server.registerTool(
 server.registerTool(
   'update_recipe',
   {
-    description: 'Update an existing recipe. title, ingredients and instructions are required by the backend.',
+    description: 'Update an existing recipe. title, ingredients and instructions are required by the backend. Cuisine tags are normalized to Title Case.',
     inputSchema: {
       id: z.string(),
       title: z.string(),
@@ -136,10 +209,14 @@ server.registerTool(
       prepTime: z.string().optional(),
       cookTime: z.string().optional(),
       servingSize: z.string().optional(),
+      rating: z.number().min(1).max(5).optional(),
+      notes: z.string().optional(),
+      nutrition: nutritionSchema.optional(),
     },
   },
-  guard(async ({ id, ...fields }) => {
-    await api(`/api/recipes/update/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(fields) });
+  guard(async ({ id, cuisines, ...fields }) => {
+    const payload = { ...fields, ...(cuisines ? { cuisines: normalizeTags(cuisines) } : {}) };
+    await api(`/api/recipes/update/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(payload) });
     return ok({ updated: true, id });
   })
 );
@@ -181,6 +258,111 @@ server.registerTool(
   guard(async ({ entries }) => {
     await api('/api/mealplan', { method: 'PUT', body: JSON.stringify({ entries }) });
     return ok({ saved: true, count: entries.length });
+  })
+);
+
+server.registerTool(
+  'suggest_recipes',
+  {
+    description: 'Suggest up to 3 kosher-friendly recipes for a request, drawing from existing recipes and/or new ideas.',
+    inputSchema: {
+      query: z.string().describe("What the user wants, e.g. 'a quick dairy-free dinner with chicken'."),
+      preferNew: z.boolean().optional().describe('Prefer brand-new ideas over existing recipes.'),
+    },
+  },
+  guard(async ({ query, preferNew }) => {
+    const all = await api('/api/recipes/getAll');
+    const existing = (all?.data?.recipes || []).map((r) => `- ${r.title} (id: ${r.id})${Array.isArray(r.cuisines) && r.cuisines.length ? ` [${r.cuisines.join(', ')}]` : ''}`).join('\n');
+    const prompt = `You are a culinary assistant for a Jewish family that keeps kosher. Suggest up to 3 recipes for this request: "${query}".
+${preferNew ? 'Prefer brand-new ideas.' : 'Prefer matching existing recipes first, then fill with new ideas.'}
+All NEW suggestions must be kosher-friendly (no pork/shellfish; never mix meat and dairy).
+Existing recipes:\n${existing || '(none)'}\n
+For each suggestion: set type "existing" (include its id and title) or "new" (include a title). Always include reasoning. Also give an overallReasoning.`;
+    const schema = {
+      type: 'OBJECT',
+      properties: {
+        suggestions: {
+          type: 'ARRAY',
+          items: {
+            type: 'OBJECT',
+            properties: {
+              type: { type: 'STRING', enum: ['existing', 'new'] },
+              title: { type: 'STRING' },
+              id: { type: 'STRING' },
+              reasoning: { type: 'STRING' },
+            },
+            required: ['type', 'title', 'reasoning'],
+          },
+        },
+        overallReasoning: { type: 'STRING' },
+      },
+      required: ['suggestions', 'overallReasoning'],
+    };
+    return ok(await callGemini(prompt, schema));
+  })
+);
+
+server.registerTool(
+  'classify_kosher',
+  {
+    description: 'Classify a recipe as meat, dairy, or pareve from its ingredients (fish and eggs are pareve).',
+    inputSchema: { title: z.string().optional(), ingredients: z.string() },
+  },
+  guard(async ({ title, ingredients }) => {
+    const prompt = `Classify this recipe as kosher "meat" (contains meat/poultry), "dairy" (contains milk/cheese/etc and no meat), or "pareve" (neither; fish and eggs are pareve). If both meat and dairy appear, choose "meat".
+${title ? `Title: ${title}\n` : ''}Ingredients: ${ingredients}`;
+    const schema = {
+      type: 'OBJECT',
+      properties: { category: { type: 'STRING', enum: ['meat', 'dairy', 'pareve'] }, reasoning: { type: 'STRING' } },
+      required: ['category', 'reasoning'],
+    };
+    return ok(await callGemini(prompt, schema));
+  })
+);
+
+server.registerTool(
+  'generate_shopping_list',
+  {
+    description: 'Build a consolidated, aisle-grouped shopping list from the given recipe ids.',
+    inputSchema: { recipeIds: z.array(z.string()).min(1) },
+  },
+  guard(async ({ recipeIds }) => {
+    const all = await api('/api/recipes/getAll');
+    const chosen = (all?.data?.recipes || []).filter((r) => recipeIds.includes(r.id));
+    if (chosen.length === 0) throw new Error('None of the given recipe ids were found.');
+    const text = chosen
+      .map((r) => `"${r.title}"\n${(r.ingredients || []).map((i) => `  - ${i.name}${i.quantity ? ` (${i.quantity})` : ''}`).join('\n')}`)
+      .join('\n');
+    const prompt = `Build one consolidated grocery shopping list from these recipes. Merge duplicate ingredients (sum compatible units, e.g. "2 eggs"+"3 eggs" => "5 eggs"; otherwise combine like "2 cups + 1 lb"). Group items by supermarket aisle (Produce, Meat & Fish, Dairy & Eggs, Bakery, Pantry & Dry Goods, Spices & Seasonings, Frozen, Beverages, Other). For each item list the recipe titles that need it. Omit plain water.\n\n${text}`;
+    const schema = {
+      type: 'OBJECT',
+      properties: {
+        groups: {
+          type: 'ARRAY',
+          items: {
+            type: 'OBJECT',
+            properties: {
+              aisle: { type: 'STRING' },
+              items: {
+                type: 'ARRAY',
+                items: {
+                  type: 'OBJECT',
+                  properties: {
+                    name: { type: 'STRING' },
+                    quantity: { type: 'STRING' },
+                    recipes: { type: 'ARRAY', items: { type: 'STRING' } },
+                  },
+                  required: ['name', 'quantity', 'recipes'],
+                },
+              },
+            },
+            required: ['aisle', 'items'],
+          },
+        },
+      },
+      required: ['groups'],
+    };
+    return ok(await callGemini(prompt, schema));
   })
 );
 
