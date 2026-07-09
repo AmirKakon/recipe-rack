@@ -22,5 +22,7 @@ export interface Recipe {
   isFavorite?: boolean;
   createdAt?: number; // epoch ms, set on create; used for "recently added" sort
   imageUrl?: string; // Firebase Storage download URL for the recipe photo
+  rating?: number; // 1-5 star rating
+  notes?: string; // free-text family cooking notes
 }
 

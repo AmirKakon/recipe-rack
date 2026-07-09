@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
 import { KosherBadge } from '@/components/recipe/KosherBadge';
+import { StarRating } from '@/components/recipe/StarRating';
 import { cn } from '@/lib/utils';
 
 interface RecipeListProps {
@@ -57,6 +58,7 @@ export function RecipeList({ recipes, onDeleteRecipe, onEditRecipe, onToggleFavo
                   )}
                   <span className="hover:underline text-primary">{recipe.title}</span>
                   <KosherBadge category={recipe.kosherCategory} />
+                  {recipe.rating ? <StarRating value={recipe.rating} readOnly size={14} /> : null}
                 </div>
               </TableCell>
               <TableCell className="py-3 align-middle">

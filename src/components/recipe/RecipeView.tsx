@@ -6,11 +6,16 @@ import type { Recipe } from '@/lib/types';
 import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { KosherBadge } from '@/components/recipe/KosherBadge';
 import { KosherSwapDialog } from '@/components/recipe/KosherSwapDialog';
+import { StarRating } from '@/components/recipe/StarRating';
+import { useToast } from '@/hooks/use-toast';
 import { scaleQuantity, SCALE_FACTORS } from '@/lib/scale';
 import { detectKosherConflict } from '@/lib/kosher';
-import { Clock, UtensilsIcon, Users, AlertTriangle, Replace } from 'lucide-react'; // Added icons
+import { Clock, UtensilsIcon, Users, AlertTriangle, Replace, Loader2 } from 'lucide-react'; // Added icons
+
+const API_BASE_URL = 'https://us-central1-recipe-rack-ighp8.cloudfunctions.net/app';
 
 interface RecipeViewProps {
   recipe: Recipe;
@@ -27,6 +32,62 @@ export function RecipeView({ recipe }: RecipeViewProps) {
     : typeof recipe.instructions === 'string' && recipe.instructions.trim() !== ''
     ? [recipe.instructions]
     : [];
+
+  const { toast } = useToast();
+  const [rating, setRating] = useState(recipe.rating ?? 0);
+  const [notes, setNotes] = useState(recipe.notes ?? '');
+  const [savingNotes, setSavingNotes] = useState(false);
+
+  // Persist a partial change by re-sending the full recipe (the update endpoint
+  // validates title/ingredients/instructions and only changes provided fields).
+  const persist = async (overrides: Partial<Recipe>) => {
+    const payload = {
+      title: recipe.title,
+      ingredients: recipe.ingredients || [],
+      instructions: instructionsArray,
+      cuisines: recipe.cuisines || [],
+      prepTime: recipe.prepTime || '',
+      cookTime: recipe.cookTime || '',
+      servingSize: recipe.servingSize || '',
+      kosherCategory: recipe.kosherCategory,
+      isFavorite: recipe.isFavorite,
+      createdAt: recipe.createdAt,
+      imageUrl: recipe.imageUrl,
+      rating,
+      notes,
+      ...overrides,
+    };
+    const res = await fetch(`${API_BASE_URL}/api/recipes/update/${recipe.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(`Update failed: ${res.statusText}`);
+    await res.json();
+  };
+
+  const handleRate = async (value: number) => {
+    const prev = rating;
+    setRating(value); // optimistic
+    try {
+      await persist({ rating: value });
+    } catch (error) {
+      setRating(prev);
+      toast({ title: 'Could not save rating', description: error instanceof Error ? error.message : 'Please try again.', variant: 'destructive' });
+    }
+  };
+
+  const handleSaveNotes = async () => {
+    setSavingNotes(true);
+    try {
+      await persist({ notes });
+      toast({ title: 'Notes saved' });
+    } catch (error) {
+      toast({ title: 'Could not save notes', description: error instanceof Error ? error.message : 'Please try again.', variant: 'destructive' });
+    } finally {
+      setSavingNotes(false);
+    }
+  };
 
   return (
     <div className="bg-card p-6 sm:p-8 rounded-lg shadow-xl">
@@ -116,6 +177,32 @@ export function RecipeView({ recipe }: RecipeViewProps) {
          <div className="mb-8 pb-8 border-b border-border"></div>
       )}
 
+
+      <div className="mb-8 pb-8 border-b border-border space-y-5 print:hidden">
+        <div>
+          <h2 className="text-xl font-semibold mb-2 text-foreground">Your Rating</h2>
+          <StarRating value={rating} onChange={handleRate} size={28} />
+        </div>
+        <div>
+          <h2 className="text-xl font-semibold mb-2 text-foreground">Cooking Notes</h2>
+          <Textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={3}
+            placeholder="Family notes — e.g. 'the kids loved it', 'used less salt', 'doubled the sauce'…"
+            className="text-base"
+          />
+          <Button
+            size="sm"
+            className="mt-2"
+            onClick={handleSaveNotes}
+            disabled={savingNotes || notes === (recipe.notes ?? '')}
+          >
+            {savingNotes && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Save Notes
+          </Button>
+        </div>
+      </div>
 
       <div className="mb-8">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
