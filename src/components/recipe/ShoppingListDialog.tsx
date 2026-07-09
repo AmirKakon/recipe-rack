@@ -29,11 +29,13 @@ interface ShoppingListDialogProps {
   recipes: Recipe[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** When provided, opens in the selection phase with these recipes pre-checked. */
+  initialSelectedIds?: string[];
 }
 
 const itemKey = (aisle: string, name: string) => `${aisle}::${name}`;
 
-export function ShoppingListDialog({ recipes, open, onOpenChange }: ShoppingListDialogProps) {
+export function ShoppingListDialog({ recipes, open, onOpenChange, initialSelectedIds }: ShoppingListDialogProps) {
   const { toast } = useToast();
   const [phase, setPhase] = useState<'select' | 'list'>('select');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -45,6 +47,14 @@ export function ShoppingListDialog({ recipes, open, onOpenChange }: ShoppingList
   // Load any saved list when the dialog opens.
   useEffect(() => {
     if (!open) return;
+    // If opened with a preselection (e.g. "shop this week"), start fresh in select mode.
+    if (initialSelectedIds && initialSelectedIds.length > 0) {
+      setSelectedIds(new Set(initialSelectedIds));
+      setResult(null);
+      setChecked({});
+      setPhase('select');
+      return;
+    }
     try {
       const raw = typeof window !== 'undefined' ? window.localStorage.getItem(STORAGE_KEY) : null;
       if (raw) {

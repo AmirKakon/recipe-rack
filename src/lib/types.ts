@@ -8,6 +8,15 @@ export interface Ingredient {
 // Kosher dietary classification. Meat and dairy may not be mixed; pareve is neutral.
 export type KosherCategory = 'meat' | 'dairy' | 'pareve';
 
+export type MealType = 'breakfast' | 'lunch' | 'dinner';
+
+// One assignment of a recipe to a day + meal slot in the weekly planner.
+export interface MealPlanEntry {
+  date: string; // YYYY-MM-DD
+  mealType: MealType;
+  recipeId: string;
+}
+
 export interface Recipe {
   id: string;
   title: string;

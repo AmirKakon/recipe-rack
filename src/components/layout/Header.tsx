@@ -1,8 +1,9 @@
 
 'use client';
 
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Utensils, Lightbulb, ShoppingCart } from 'lucide-react';
+import { PlusCircle, Utensils, Lightbulb, ShoppingCart, CalendarDays } from 'lucide-react';
 
 interface HeaderProps {
   onAddRecipeClick: () => void;
@@ -19,6 +20,12 @@ export function Header({ onAddRecipeClick, onSuggestRecipeClick, onShoppingListC
           <h1 className="text-3xl font-bold text-foreground">Recipe Rack</h1>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+          <Button asChild variant="outline" size="lg" className="w-full sm:w-auto">
+            <Link href="/planner">
+              <CalendarDays className="mr-2 h-5 w-5" />
+              Planner
+            </Link>
+          </Button>
           {onShoppingListClick && (
             <Button onClick={onShoppingListClick} variant="outline" size="lg" className="w-full sm:w-auto">
               <ShoppingCart className="mr-2 h-5 w-5" />
