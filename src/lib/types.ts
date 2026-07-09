@@ -33,5 +33,6 @@ export interface Recipe {
   imageUrl?: string; // Firebase Storage download URL for the recipe photo
   rating?: number; // 1-5 star rating
   notes?: string; // free-text family cooking notes
+  nutrition?: { calories?: string; protein?: string; carbs?: string; fat?: string }; // AI-estimated, per serving
 }
 

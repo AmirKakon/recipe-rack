@@ -24,6 +24,7 @@ import { extractRecipeFromUrl } from '@/ai/flows/extract-recipe-from-url-flow.ts
 import { extractRecipeFromTiktok } from '@/ai/flows/extract-recipe-from-tiktok-flow.ts';
 import { suggestRecipeDetails } from '@/ai/flows/suggest-recipe-details-flow';
 import { classifyKosherCategory } from '@/ai/flows/classify-kosher-category-flow.ts';
+import { suggestCuisineTags } from '@/ai/flows/suggest-cuisine-tags-flow.ts';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, PlusCircle, Sparkles, Trash2, ArrowUp, ArrowDown, ScanEye, Wand2, UploadCloud, Link2, Video, X, AlertTriangle } from 'lucide-react';
 import { useEffect, useState, useRef } from 'react';
@@ -137,6 +138,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
   const [suggestedServingSize, setSuggestedServingSize] = useState('');
 
   const [isClassifyingKosher, setIsClassifyingKosher] = useState(false);
+  const [isSuggestingTags, setIsSuggestingTags] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
@@ -338,6 +340,33 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
     setSuggestedServingSize('');
   };
 
+  const handleSuggestTags = async () => {
+    const ingredientsString = form.getValues('ingredients').map((i) => i.name).filter((n) => n.trim()).join(', ');
+    if (!ingredientsString) {
+      toast({ title: 'Missing Ingredients', description: 'Add some ingredients so the AI can suggest tags.', variant: 'destructive' });
+      return;
+    }
+    setIsSuggestingTags(true);
+    try {
+      const existing = form.getValues('cuisine') || '';
+      const result = await suggestCuisineTags({ title: form.getValues('title'), ingredients: ingredientsString, existingTags: existing });
+      const existingArr = existing.split(',').map((t) => t.trim()).filter(Boolean);
+      const seen = new Set(existingArr.map((t) => t.toLowerCase()));
+      const merged = [...existingArr];
+      for (const t of result.cuisines) {
+        const key = t.trim().toLowerCase();
+        if (key && !seen.has(key)) { seen.add(key); merged.push(t.trim()); }
+      }
+      form.setValue('cuisine', merged.join(', '), { shouldValidate: true });
+      toast({ title: 'Tags Suggested!', description: result.cuisines.join(', ') || 'No new tags.' });
+    } catch (error) {
+      console.error('Error suggesting tags:', error);
+      toast({ title: 'Tag Suggestion Error', description: error instanceof Error ? error.message : 'Failed to suggest tags.', variant: 'destructive' });
+    } finally {
+      setIsSuggestingTags(false);
+    }
+  };
+
   const handleClassifyKosher = async () => {
     const ingredientsValue = form.getValues('ingredients');
     const ingredientsString = ingredientsValue
@@ -513,7 +542,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
     setIsScanDialogVisible(false);
   }
 
-  const commonDisabledProps = isSaving || isSuggestingName || isScanningRecipe || isScanDialogVisible || isSuggestingDetails || isClassifyingKosher || isUploadingImage;
+  const commonDisabledProps = isSaving || isSuggestingName || isScanningRecipe || isScanDialogVisible || isSuggestingDetails || isClassifyingKosher || isSuggestingTags || isUploadingImage;
   const isScanButtonDisabled =
     activeScanTab === 'file'
       ? scanFiles.length === 0
@@ -599,6 +628,17 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                       <FormControl>
                         <Input placeholder="e.g., Italian, Quick, Spicy" {...field} className="text-base py-2 px-3"/>
                       </FormControl>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleSuggestTags}
+                        disabled={commonDisabledProps}
+                        className="mt-2 w-full sm:w-auto"
+                      >
+                        {isSuggestingTags ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                        Suggest Tags
+                      </Button>
                       <FormMessage />
                     </FormItem>
                   )}

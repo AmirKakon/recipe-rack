@@ -9,11 +9,13 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { KosherBadge } from '@/components/recipe/KosherBadge';
 import { KosherSwapDialog } from '@/components/recipe/KosherSwapDialog';
+import { TranslateDialog } from '@/components/recipe/TranslateDialog';
 import { StarRating } from '@/components/recipe/StarRating';
 import { useToast } from '@/hooks/use-toast';
 import { scaleQuantity, SCALE_FACTORS } from '@/lib/scale';
 import { detectKosherConflict } from '@/lib/kosher';
-import { Clock, UtensilsIcon, Users, AlertTriangle, Replace, Loader2 } from 'lucide-react'; // Added icons
+import { estimateNutrition } from '@/ai/flows/estimate-nutrition-flow.ts';
+import { Clock, UtensilsIcon, Users, AlertTriangle, Replace, Loader2, Languages, Activity } from 'lucide-react'; // Added icons
 
 const API_BASE_URL = 'https://us-central1-recipe-rack-ighp8.cloudfunctions.net/app';
 
@@ -37,6 +39,9 @@ export function RecipeView({ recipe }: RecipeViewProps) {
   const [rating, setRating] = useState(recipe.rating ?? 0);
   const [notes, setNotes] = useState(recipe.notes ?? '');
   const [savingNotes, setSavingNotes] = useState(false);
+  const [translateOpen, setTranslateOpen] = useState(false);
+  const [nutrition, setNutrition] = useState(recipe.nutrition);
+  const [estimatingNutrition, setEstimatingNutrition] = useState(false);
 
   // Persist a partial change by re-sending the full recipe (the update endpoint
   // validates title/ingredients/instructions and only changes provided fields).
@@ -55,6 +60,7 @@ export function RecipeView({ recipe }: RecipeViewProps) {
       imageUrl: recipe.imageUrl,
       rating,
       notes,
+      nutrition,
       ...overrides,
     };
     const res = await fetch(`${API_BASE_URL}/api/recipes/update/${recipe.id}`, {
@@ -89,6 +95,23 @@ export function RecipeView({ recipe }: RecipeViewProps) {
     }
   };
 
+  const handleEstimateNutrition = async () => {
+    setEstimatingNutrition(true);
+    try {
+      const ingredients = (recipe.ingredients || [])
+        .map((i) => (i.quantity ? `${i.name} (${i.quantity})` : i.name))
+        .join('\n');
+      const result = await estimateNutrition({ title: recipe.title, ingredients, servingSize: recipe.servingSize });
+      setNutrition(result);
+      await persist({ nutrition: result });
+      toast({ title: 'Nutrition estimated' });
+    } catch (error) {
+      toast({ title: 'Could not estimate nutrition', description: error instanceof Error ? error.message : 'Please try again.', variant: 'destructive' });
+    } finally {
+      setEstimatingNutrition(false);
+    }
+  };
+
   return (
     <div className="bg-card p-6 sm:p-8 rounded-lg shadow-xl">
       {recipe.imageUrl && (
@@ -112,6 +135,10 @@ export function RecipeView({ recipe }: RecipeViewProps) {
           <Button variant="outline" size="sm" onClick={() => setSwapOpen(true)} className="print:hidden">
             <Replace className="mr-2 h-4 w-4" />
             Kosher Swaps
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setTranslateOpen(true)} className="print:hidden">
+            <Languages className="mr-2 h-4 w-4" />
+            Translate
           </Button>
         </div>
       </div>
@@ -177,6 +204,35 @@ export function RecipeView({ recipe }: RecipeViewProps) {
          <div className="mb-8 pb-8 border-b border-border"></div>
       )}
 
+
+      <div className={`mb-8 pb-8 border-b border-border ${!nutrition ? 'print:hidden' : ''}`}>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+          <h2 className="text-xl font-semibold text-foreground">
+            Nutrition <span className="text-sm font-normal text-muted-foreground">(estimated, per serving)</span>
+          </h2>
+          <Button variant="outline" size="sm" onClick={handleEstimateNutrition} disabled={estimatingNutrition} className="print:hidden">
+            {estimatingNutrition ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Activity className="mr-2 h-4 w-4" />}
+            {nutrition ? 'Re-estimate' : 'Estimate'}
+          </Button>
+        </div>
+        {nutrition ? (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {[
+              { label: 'Calories', value: nutrition.calories },
+              { label: 'Protein', value: nutrition.protein },
+              { label: 'Carbs', value: nutrition.carbs },
+              { label: 'Fat', value: nutrition.fat },
+            ].map((m) => (
+              <div key={m.label} className="rounded-md border bg-secondary/30 p-3 text-center">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">{m.label}</p>
+                <p className="font-semibold text-foreground">{m.value || '—'}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground print:hidden">No estimate yet — tap Estimate for a rough per-serving breakdown.</p>
+        )}
+      </div>
 
       <div className="mb-8 pb-8 border-b border-border space-y-5 print:hidden">
         <div>
@@ -257,6 +313,7 @@ export function RecipeView({ recipe }: RecipeViewProps) {
       </div>
 
       <KosherSwapDialog recipe={recipe} open={swapOpen} onOpenChange={setSwapOpen} />
+      <TranslateDialog recipe={recipe} open={translateOpen} onOpenChange={setTranslateOpen} />
     </div>
   );
 }
