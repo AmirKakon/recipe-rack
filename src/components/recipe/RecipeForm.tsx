@@ -25,6 +25,7 @@ import { extractRecipeFromTiktok } from '@/ai/flows/extract-recipe-from-tiktok-f
 import { suggestRecipeDetails } from '@/ai/flows/suggest-recipe-details-flow';
 import { classifyKosherCategory } from '@/ai/flows/classify-kosher-category-flow.ts';
 import { suggestCuisineTags } from '@/ai/flows/suggest-cuisine-tags-flow.ts';
+import { normalizeTags } from '@/lib/tags';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, PlusCircle, Sparkles, Trash2, ArrowUp, ArrowDown, ScanEye, Wand2, UploadCloud, Link2, Video, X, AlertTriangle } from 'lucide-react';
 import { useEffect, useState, useRef } from 'react';
@@ -350,13 +351,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
     try {
       const existing = form.getValues('cuisine') || '';
       const result = await suggestCuisineTags({ title: form.getValues('title'), ingredients: ingredientsString, existingTags: existing });
-      const existingArr = existing.split(',').map((t) => t.trim()).filter(Boolean);
-      const seen = new Set(existingArr.map((t) => t.toLowerCase()));
-      const merged = [...existingArr];
-      for (const t of result.cuisines) {
-        const key = t.trim().toLowerCase();
-        if (key && !seen.has(key)) { seen.add(key); merged.push(t.trim()); }
-      }
+      const merged = normalizeTags([...existing.split(','), ...result.cuisines]);
       form.setValue('cuisine', merged.join(', '), { shouldValidate: true });
       toast({ title: 'Tags Suggested!', description: result.cuisines.join(', ') || 'No new tags.' });
     } catch (error) {

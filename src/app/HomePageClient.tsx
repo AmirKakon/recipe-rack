@@ -11,6 +11,7 @@ import { HolidayBanner } from '@/components/recipe/HolidayBanner';
 import type { Recipe, KosherCategory } from '@/lib/types';
 import type { RecipeFormData } from '@/lib/schemas';
 import { KOSHER_CATEGORIES } from '@/lib/kosher';
+import { normalizeTags } from '@/lib/tags';
 import { SORT_OPTIONS, sortRecipes, type SortOption } from '@/lib/recipe-sort';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -149,9 +150,9 @@ export default function HomePageClient() {
       let response;
       let successMessage = '';
 
-      const cuisineTagsArray = recipeFormData.cuisine
-        ? recipeFormData.cuisine.split(',').map(tag => tag.trim()).filter(tag => tag)
-        : [];
+      const cuisineTagsArray = normalizeTags(
+        recipeFormData.cuisine ? recipeFormData.cuisine.split(',') : []
+      );
 
       // The recipe fields as they will be stored (and mirrored into local state).
       const savedFields = {
