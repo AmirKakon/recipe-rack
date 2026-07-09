@@ -25,14 +25,14 @@ import { extractRecipeFromTiktok } from '@/ai/flows/extract-recipe-from-tiktok-f
 import { suggestRecipeDetails } from '@/ai/flows/suggest-recipe-details-flow';
 import { classifyKosherCategory } from '@/ai/flows/classify-kosher-category-flow.ts';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Sparkles, Trash2, ArrowUp, ArrowDown, ScanEye, Wand2, UploadCloud, Link2, Video, X } from 'lucide-react';
+import { Loader2, PlusCircle, Sparkles, Trash2, ArrowUp, ArrowDown, ScanEye, Wand2, UploadCloud, Link2, Video, X, AlertTriangle } from 'lucide-react';
 import { useEffect, useState, useRef } from 'react';
 import type { Recipe } from '@/lib/types';
 import Image from 'next/image';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { KOSHER_CATEGORIES } from '@/lib/kosher';
+import { KOSHER_CATEGORIES, detectKosherConflict } from '@/lib/kosher';
 
 
 interface RecipeFormProps {
@@ -522,6 +522,8 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
       : !tiktokUrl.trim();
 
   const watchedImageUrl = form.watch('imageUrl');
+  const watchedIngredients = form.watch('ingredients');
+  const formConflict = detectKosherConflict(watchedIngredients || []);
 
 
   return (
@@ -766,6 +768,17 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                     )}
                   />
                 </div>
+
+                {formConflict.hasConflict && (
+                  <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3">
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-destructive mt-0.5" />
+                    <p className="text-sm text-muted-foreground">
+                      <span className="font-semibold text-destructive">Meat + dairy mix:</span> this recipe has meat
+                      ({formConflict.meatItems.join(', ')}) and dairy ({formConflict.dairyItems.join(', ')}) together,
+                      which isn&apos;t kosher.
+                    </p>
+                  </div>
+                )}
 
                 <div>
                   <FormLabel className="text-base">Ingredients</FormLabel>

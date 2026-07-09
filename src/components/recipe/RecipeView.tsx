@@ -7,8 +7,10 @@ import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { KosherBadge } from '@/components/recipe/KosherBadge';
+import { KosherSwapDialog } from '@/components/recipe/KosherSwapDialog';
 import { scaleQuantity, SCALE_FACTORS } from '@/lib/scale';
-import { Clock, UtensilsIcon, Users } from 'lucide-react'; // Added icons
+import { detectKosherConflict } from '@/lib/kosher';
+import { Clock, UtensilsIcon, Users, AlertTriangle, Replace } from 'lucide-react'; // Added icons
 
 interface RecipeViewProps {
   recipe: Recipe;
@@ -16,6 +18,9 @@ interface RecipeViewProps {
 
 export function RecipeView({ recipe }: RecipeViewProps) {
   const [scale, setScale] = useState(1);
+  const [swapOpen, setSwapOpen] = useState(false);
+
+  const conflict = detectKosherConflict(recipe.ingredients || []);
 
   const instructionsArray = Array.isArray(recipe.instructions)
     ? recipe.instructions
@@ -41,8 +46,27 @@ export function RecipeView({ recipe }: RecipeViewProps) {
         <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground mb-2 sm:mb-0">
           {recipe.title}
         </h1>
-        <KosherBadge category={recipe.kosherCategory} className="text-sm px-3 py-1 shrink-0" />
+        <div className="flex items-center gap-2 shrink-0">
+          <KosherBadge category={recipe.kosherCategory} className="text-sm px-3 py-1" />
+          <Button variant="outline" size="sm" onClick={() => setSwapOpen(true)} className="print:hidden">
+            <Replace className="mr-2 h-4 w-4" />
+            Kosher Swaps
+          </Button>
+        </div>
       </div>
+
+      {conflict.hasConflict && (
+        <div className="mb-6 flex items-start gap-3 rounded-md border border-destructive/40 bg-destructive/10 p-4">
+          <AlertTriangle className="h-5 w-5 shrink-0 text-destructive mt-0.5" />
+          <div className="text-sm">
+            <p className="font-semibold text-destructive">This recipe mixes meat and dairy</p>
+            <p className="text-muted-foreground mt-1">
+              Contains meat ({conflict.meatItems.join(', ')}) and dairy ({conflict.dairyItems.join(', ')}), which isn&apos;t kosher.
+              Use <span className="font-medium">Kosher Swaps</span> to make it dairy-free or meat-free.
+            </p>
+          </div>
+        </div>
+      )}
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 pb-8 border-b border-border">
         {recipe.prepTime && (
@@ -144,6 +168,8 @@ export function RecipeView({ recipe }: RecipeViewProps) {
           <p className="text-muted-foreground">No instructions provided.</p>
         )}
       </div>
+
+      <KosherSwapDialog recipe={recipe} open={swapOpen} onOpenChange={setSwapOpen} />
     </div>
   );
 }
