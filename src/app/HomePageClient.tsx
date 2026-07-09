@@ -7,6 +7,7 @@ import { Header } from '@/components/layout/Header';
 import { RecipeList } from '@/components/recipe/RecipeList';
 import { RecipeForm } from '@/components/recipe/RecipeForm';
 import { ShoppingListDialog } from '@/components/recipe/ShoppingListDialog';
+import { HolidayBanner } from '@/components/recipe/HolidayBanner';
 import type { Recipe, KosherCategory } from '@/lib/types';
 import type { RecipeFormData } from '@/lib/schemas';
 import { KOSHER_CATEGORIES } from '@/lib/kosher';
@@ -38,6 +39,7 @@ export default function HomePageClient() {
   const [kosherFilter, setKosherFilter] = useState<KosherCategory | 'all'>('all');
   const [selectedCuisine, setSelectedCuisine] = useState<string | null>(null);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [shabbatOnly, setShabbatOnly] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>('title');
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -305,15 +307,24 @@ export default function HomePageClient() {
     setIsSuggestionDialogOpen(false);
   };
 
-  const handleGetSuggestion = async (options: { preferNew?: boolean } = {}) => {
-    if (!suggestionQuery.trim()) {
+  const handleHolidaySuggest = (queryHint: string) => {
+    const query = `recipe ideas for ${queryHint}`;
+    setSuggestionQuery(query);
+    setSuggestionResult(null);
+    setIsSuggestionDialogOpen(true);
+    handleGetSuggestion({ query });
+  };
+
+  const handleGetSuggestion = async (options: { preferNew?: boolean; query?: string } = {}) => {
+    const effectiveQuery = (options.query ?? suggestionQuery).trim();
+    if (!effectiveQuery) {
       toast({ title: "Input Required", description: "Please tell us what you'd like to eat.", variant: "destructive" });
       return;
     }
     setIsSuggestingForPage(true);
     // Do not clear previous results immediately if preferNew is true, to keep the "Try Other Ideas" button visible during loading
     if (!options.preferNew) {
-        setSuggestionResult(null); 
+        setSuggestionResult(null);
     }
 
     try {
@@ -322,8 +333,8 @@ export default function HomePageClient() {
         title: r.title,
         cuisines: r.cuisines || [],
       }));
-      const result = await suggestRecipeBasedOnInput({ 
-        userInput: suggestionQuery, 
+      const result = await suggestRecipeBasedOnInput({
+        userInput: effectiveQuery,
         existingRecipes: existingRecipeInfo,
         preferNew: !!options.preferNew,
       });
@@ -381,18 +392,20 @@ export default function HomePageClient() {
       const matchesKosher = kosherFilter === 'all' || recipe.kosherCategory === kosherFilter;
       const matchesCuisine = !selectedCuisine || (recipe.cuisines || []).includes(selectedCuisine);
       const matchesFavorite = !favoritesOnly || !!recipe.isFavorite;
-      return matchesSearch && matchesKosher && matchesCuisine && matchesFavorite;
+      const matchesShabbat = !shabbatOnly || (recipe.cuisines || []).some(tag => /shabb?at|shabbos/i.test(tag));
+      return matchesSearch && matchesKosher && matchesCuisine && matchesFavorite && matchesShabbat;
     });
     return sortRecipes(filtered, sortBy);
-  }, [recipes, searchTerm, kosherFilter, selectedCuisine, favoritesOnly, sortBy]);
+  }, [recipes, searchTerm, kosherFilter, selectedCuisine, favoritesOnly, shabbatOnly, sortBy]);
 
-  const isFiltering = searchTerm.trim() !== '' || kosherFilter !== 'all' || selectedCuisine !== null || favoritesOnly;
+  const isFiltering = searchTerm.trim() !== '' || kosherFilter !== 'all' || selectedCuisine !== null || favoritesOnly || shabbatOnly;
 
   const clearFilters = () => {
     setSearchTerm('');
     setKosherFilter('all');
     setSelectedCuisine(null);
     setFavoritesOnly(false);
+    setShabbatOnly(false);
   };
 
   const handleToggleCuisineFilter = useCallback((tag: string) => {
@@ -405,6 +418,7 @@ export default function HomePageClient() {
     <div className="min-h-screen flex flex-col bg-background">
       <Header onAddRecipeClick={handleOpenAddForm} onSuggestRecipeClick={handleOpenSuggestionDialog} onShoppingListClick={() => setIsShoppingListOpen(true)} />
       <main className="flex-grow container mx-auto px-4 py-8">
+        <HolidayBanner onGetIdeas={handleHolidaySuggest} />
         <div className="mb-6 space-y-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
@@ -465,6 +479,14 @@ export default function HomePageClient() {
             >
               <Star className={`mr-1.5 h-4 w-4 ${favoritesOnly ? 'fill-current' : ''}`} />
               Favorites
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={shabbatOnly ? 'default' : 'outline'}
+              onClick={() => setShabbatOnly((v) => !v)}
+            >
+              🕯️ Shabbat
             </Button>
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">Sort:</span>
