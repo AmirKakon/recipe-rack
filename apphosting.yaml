@@ -20,3 +20,9 @@ env:
     secret: GEMINI_API_KEY
     availability:
       - RUNTIME
+  # QRganize inventory access (per-device uuid; treated as a secret).
+  #   firebase apphosting:secrets:set QRGANIZE_UUID --project recipe-rack-ighp8
+  - variable: QRGANIZE_UUID
+    secret: QRGANIZE_UUID
+    availability:
+      - RUNTIME
