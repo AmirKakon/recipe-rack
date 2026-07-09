@@ -5,9 +5,10 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { RecipeView } from '@/components/recipe/RecipeView';
+import { CookMode } from '@/components/recipe/CookMode';
 import type { Recipe } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Loader2, ServerCrash, Home, Pencil } from 'lucide-react'; // Added Pencil
+import { ArrowLeft, Loader2, ServerCrash, Home, Pencil, ChefHat } from 'lucide-react'; // Added Pencil
 
 const API_BASE_URL = 'https://us-central1-recipe-rack-ighp8.cloudfunctions.net/app';
 
@@ -20,6 +21,7 @@ export default function RecipeDetailPage() {
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isCookModeOpen, setIsCookModeOpen] = useState(false);
 
   const processFetchedRecipe = (fetchedRecipeData: any): Recipe => {
     let cuisinesArray: string[] = [];
@@ -132,9 +134,14 @@ export default function RecipeDetailPage() {
             <Pencil className="mr-2 h-5 w-5" />
             Edit Recipe
           </Button>
+          <Button variant="yellow" onClick={() => setIsCookModeOpen(true)} className="shadow-sm">
+            <ChefHat className="mr-2 h-5 w-5" />
+            Cook Mode
+          </Button>
         </div>
         <RecipeView recipe={recipe} />
       </div>
+      {isCookModeOpen && <CookMode recipe={recipe} onClose={() => setIsCookModeOpen(false)} />}
     </div>
   );
 }
