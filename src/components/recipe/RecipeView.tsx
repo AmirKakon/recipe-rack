@@ -10,12 +10,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { KosherBadge } from '@/components/recipe/KosherBadge';
 import { KosherSwapDialog } from '@/components/recipe/KosherSwapDialog';
 import { TranslateDialog } from '@/components/recipe/TranslateDialog';
+import { PantryCheckDialog } from '@/components/recipe/PantryCheckDialog';
 import { StarRating } from '@/components/recipe/StarRating';
 import { useToast } from '@/hooks/use-toast';
 import { scaleQuantity, SCALE_FACTORS } from '@/lib/scale';
 import { detectKosherConflict } from '@/lib/kosher';
 import { estimateNutrition } from '@/ai/flows/estimate-nutrition-flow.ts';
-import { Clock, UtensilsIcon, Users, AlertTriangle, Replace, Loader2, Languages, Activity } from 'lucide-react'; // Added icons
+import { Clock, UtensilsIcon, Users, AlertTriangle, Replace, Loader2, Languages, Activity, PackageSearch } from 'lucide-react'; // Added icons
 
 const API_BASE_URL = 'https://us-central1-recipe-rack-ighp8.cloudfunctions.net/app';
 
@@ -26,6 +27,7 @@ interface RecipeViewProps {
 export function RecipeView({ recipe }: RecipeViewProps) {
   const [scale, setScale] = useState(1);
   const [swapOpen, setSwapOpen] = useState(false);
+  const [pantryOpen, setPantryOpen] = useState(false);
 
   const conflict = detectKosherConflict(recipe.ingredients || []);
 
@@ -139,6 +141,10 @@ export function RecipeView({ recipe }: RecipeViewProps) {
           <Button variant="outline" size="sm" onClick={() => setTranslateOpen(true)} className="print:hidden">
             <Languages className="mr-2 h-4 w-4" />
             Translate
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setPantryOpen(true)} className="print:hidden">
+            <PackageSearch className="mr-2 h-4 w-4" />
+            Pantry Check
           </Button>
         </div>
       </div>
@@ -314,6 +320,7 @@ export function RecipeView({ recipe }: RecipeViewProps) {
 
       <KosherSwapDialog recipe={recipe} open={swapOpen} onOpenChange={setSwapOpen} />
       <TranslateDialog recipe={recipe} open={translateOpen} onOpenChange={setTranslateOpen} />
+      <PantryCheckDialog recipe={recipe} open={pantryOpen} onOpenChange={setPantryOpen} />
     </div>
   );
 }

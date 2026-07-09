@@ -206,3 +206,22 @@ interface ShoppingListItem { name; quantity; aisle?; checked; recipeIds[]; }
 ---
 
 *Generated as a planning artifact — nothing here is implemented yet. Happy to spec out any single item in detail or start building.*
+
+---
+
+## QRganize Integration (home inventory ↔ recipes)
+
+[QRganize](https://qrganize-f651b.web.app/) is a companion QR-based home-inventory app (containers + items with name/price/quantity/expirationDate/shopping-list flag; open REST API keyed by a `uuid` header). It ships an MCP server exposing `search_items`, `list_containers`, `get_container_contents`, `find_item_location`, `get_expiring_soon`, `get_shopping_list`, `add_to_shopping_list`, `add_item_to_container`.
+
+Integration ideas:
+
+1. **Shopping list → QRganize** — a "Send to QRganize" button on Recipe Rack's shopping-list dialog that pushes each item onto QRganize's shopping list (find-by-name → flag, or create). Optional; user chooses Recipe Rack's list vs QRganize's.
+2. **Cook from what I have (pantry)** — feed QRganize item names into the kosher suggestion flow ("suggest a recipe using what I have"). Upgrades to **soon-to-expire** cooking automatically once items have expiration dates.
+3. **Have vs Need** — for a recipe, match ingredients against QRganize inventory; show what's on hand vs missing; one-tap add the gaps to a shopping list.
+4. **Check for alternative in stock** — for a *missing* ingredient, AI proposes kosher-friendly substitutes and cross-references them against QRganize stock: *"out of butter, but you have margarine (pareve, 1:1)."* Falls back to general substitutes + add-to-shopping-list when nothing's on hand.
+
+**Wiring:** Recipe Rack calls QRganize's REST API from a Next server action; `QRGANIZE_UUID` + `QRGANIZE_API_URL` come from config (`.env.local` locally, App Hosting secret in prod).
+
+**Caveats:**
+- QRganize items currently have `quantity: 0` and no expiration dates, so "in stock (qty>0)" and "expiring soon" find nothing yet. v1 treats **catalog presence** as "you have/buy it"; it upgrades to true stock/expiry once that data is tracked.
+- QRganize's API is open (no auth) and keyed by a `uuid` — treat the uuid like an access token.
