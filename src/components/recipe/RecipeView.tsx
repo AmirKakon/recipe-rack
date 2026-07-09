@@ -1,10 +1,13 @@
 
 'use client';
 
+import { useState } from 'react';
 import type { Recipe } from '@/lib/types';
 import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { KosherBadge } from '@/components/recipe/KosherBadge';
+import { scaleQuantity, SCALE_FACTORS } from '@/lib/scale';
 import { Clock, UtensilsIcon, Users } from 'lucide-react'; // Added icons
 
 interface RecipeViewProps {
@@ -12,6 +15,8 @@ interface RecipeViewProps {
 }
 
 export function RecipeView({ recipe }: RecipeViewProps) {
+  const [scale, setScale] = useState(1);
+
   const instructionsArray = Array.isArray(recipe.instructions)
     ? recipe.instructions
     : typeof recipe.instructions === 'string' && recipe.instructions.trim() !== ''
@@ -89,17 +94,39 @@ export function RecipeView({ recipe }: RecipeViewProps) {
 
 
       <div className="mb-8">
-        <h2 className="text-2xl font-semibold mb-3 text-foreground">Ingredients:</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+          <h2 className="text-2xl font-semibold text-foreground">Ingredients:</h2>
+          <div className="flex items-center gap-1 print:hidden">
+            <span className="text-sm text-muted-foreground mr-1">Scale:</span>
+            {SCALE_FACTORS.map((f) => (
+              <Button
+                key={f.value}
+                type="button"
+                size="sm"
+                variant={scale === f.value ? 'default' : 'outline'}
+                onClick={() => setScale(f.value)}
+                aria-pressed={scale === f.value}
+              >
+                {f.label}
+              </Button>
+            ))}
+          </div>
+        </div>
         {recipe.ingredients && recipe.ingredients.length > 0 ? (
           <ul className="list-disc list-inside space-y-2 text-muted-foreground">
             {recipe.ingredients.map((ingredient) => (
               <li key={ingredient.id} className="text-base">
-                <span className="font-medium text-foreground">{ingredient.name}</span>: {ingredient.quantity}
+                <span className="font-medium text-foreground">{ingredient.name}</span>: {scaleQuantity(ingredient.quantity, scale)}
               </li>
             ))}
           </ul>
         ) : (
           <p className="text-muted-foreground">No ingredients listed.</p>
+        )}
+        {scale !== 1 && (
+          <p className="mt-2 text-sm text-muted-foreground italic print:hidden">
+            Quantities scaled {SCALE_FACTORS.find((f) => f.value === scale)?.label} from the original.
+          </p>
         )}
       </div>
 
