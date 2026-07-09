@@ -1,0 +1,16 @@
+{
+  "name": "recipe-rack-mcp",
+  "version": "1.0.0",
+  "description": "MCP server exposing Recipe Rack (recipes + meal plan) as tools for Claude.",
+  "type": "module",
+  "bin": {
+    "recipe-rack-mcp": "index.js"
+  },
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^3.23.8"
+  }
+}
