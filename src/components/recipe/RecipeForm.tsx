@@ -23,6 +23,7 @@ import type { ExtractRecipeFromImageOutput } from '@/ai/schemas/recipe-extractio
 import { extractRecipeFromUrl } from '@/ai/flows/extract-recipe-from-url-flow.ts';
 import { extractRecipeFromTiktok } from '@/ai/flows/extract-recipe-from-tiktok-flow.ts';
 import { suggestRecipeDetails } from '@/ai/flows/suggest-recipe-details-flow';
+import { classifyKosherCategory } from '@/ai/flows/classify-kosher-category-flow.ts';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, PlusCircle, Sparkles, Trash2, ArrowUp, ArrowDown, ScanEye, Wand2, UploadCloud, Link2, Video, X } from 'lucide-react';
 import { useEffect, useState, useRef } from 'react';
@@ -30,6 +31,8 @@ import type { Recipe } from '@/lib/types';
 import Image from 'next/image';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { KOSHER_CATEGORIES } from '@/lib/kosher';
 
 
 interface RecipeFormProps {
@@ -48,6 +51,7 @@ const defaultFormValues: RecipeFormData = {
   prepTime: '',
   cookTime: '',
   servingSize: '',
+  kosherCategory: undefined,
 };
 
 type ScanMode = "file" | "url" | "tiktok";
@@ -90,6 +94,8 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
   const [suggestedPrepTime, setSuggestedPrepTime] = useState('');
   const [suggestedCookTime, setSuggestedCookTime] = useState('');
   const [suggestedServingSize, setSuggestedServingSize] = useState('');
+
+  const [isClassifyingKosher, setIsClassifyingKosher] = useState(false);
 
   const [isScanDialogVisible, setIsScanDialogVisible] = useState(false);
   const [isScanningRecipe, setIsScanningRecipe] = useState(false);
@@ -149,6 +155,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
           prepTime: recipeToEdit.prepTime || '',
           cookTime: recipeToEdit.cookTime || '',
           servingSize: recipeToEdit.servingSize || '',
+          kosherCategory: recipeToEdit.kosherCategory,
         });
       } else {
         form.reset(defaultFormValues);
@@ -287,6 +294,31 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
     setSuggestedServingSize('');
   };
 
+  const handleClassifyKosher = async () => {
+    const ingredientsValue = form.getValues('ingredients');
+    const ingredientsString = ingredientsValue
+      .map((ing) => ing.name)
+      .filter((name) => name.trim())
+      .join(', ');
+
+    if (!ingredientsString) {
+      toast({ title: 'Missing Ingredients', description: 'Add some ingredients so the AI can classify the recipe.', variant: 'destructive' });
+      return;
+    }
+
+    setIsClassifyingKosher(true);
+    try {
+      const result = await classifyKosherCategory({ title: form.getValues('title'), ingredients: ingredientsString });
+      form.setValue('kosherCategory', result.category, { shouldValidate: true });
+      toast({ title: 'Classified!', description: `Marked as ${result.category}. ${result.reasoning}` });
+    } catch (error) {
+      console.error('Error classifying kosher category:', error);
+      toast({ title: 'Classification Error', description: error instanceof Error ? error.message : 'Failed to classify the recipe.', variant: 'destructive' });
+    } finally {
+      setIsClassifyingKosher(false);
+    }
+  };
+
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
@@ -402,7 +434,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
     setIsScanDialogVisible(false);
   }
 
-  const commonDisabledProps = isSaving || isSuggestingName || isScanningRecipe || isScanDialogVisible || isSuggestingDetails;
+  const commonDisabledProps = isSaving || isSuggestingName || isScanningRecipe || isScanDialogVisible || isSuggestingDetails || isClassifyingKosher;
   const isScanButtonDisabled =
     activeScanTab === 'file'
       ? scanFiles.length === 0
@@ -426,7 +458,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
           
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <fieldset disabled={isSaving || isScanningRecipe || isSuggestingDetails} className="space-y-6">
+              <fieldset disabled={isSaving || isScanningRecipe || isSuggestingDetails || isClassifyingKosher} className="space-y-6">
                 <FormField
                   control={form.control}
                   name="title"
@@ -488,7 +520,42 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                     </FormItem>
                   )}
                 />
-                
+
+                <FormField
+                  control={form.control}
+                  name="kosherCategory"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-base">Kosher Category</FormLabel>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <FormControl>
+                          <Select value={field.value ?? ''} onValueChange={field.onChange}>
+                            <SelectTrigger className="w-full sm:w-56 text-base">
+                              <SelectValue placeholder="Meat / Dairy / Pareve" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {KOSHER_CATEGORIES.map((cat) => (
+                                <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </FormControl>
+                        <Button
+                          type="button"
+                          variant="default"
+                          onClick={handleClassifyKosher}
+                          disabled={commonDisabledProps}
+                          className="w-full sm:w-auto"
+                        >
+                          {isClassifyingKosher ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                          Auto-classify
+                        </Button>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 <div className="space-y-1 my-4">
                    <Button
                         type="button"

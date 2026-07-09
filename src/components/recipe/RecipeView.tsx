@@ -3,6 +3,7 @@
 
 import type { Recipe } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
+import { KosherBadge } from '@/components/recipe/KosherBadge';
 import { Clock, UtensilsIcon, Users } from 'lucide-react'; // Added icons
 
 interface RecipeViewProps {
@@ -18,10 +19,11 @@ export function RecipeView({ recipe }: RecipeViewProps) {
 
   return (
     <div className="bg-card p-6 sm:p-8 rounded-lg shadow-xl">
-      <div className="flex flex-col sm:flex-row justify-between items-start mb-6 pb-6 border-b border-border">
+      <div className="flex flex-col sm:flex-row justify-between items-start mb-6 pb-6 border-b border-border gap-3">
         <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground mb-2 sm:mb-0">
           {recipe.title}
         </h1>
+        <KosherBadge category={recipe.kosherCategory} className="text-sm px-3 py-1 shrink-0" />
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 pb-8 border-b border-border">

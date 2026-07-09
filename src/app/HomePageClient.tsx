@@ -6,8 +6,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Header } from '@/components/layout/Header';
 import { RecipeList } from '@/components/recipe/RecipeList';
 import { RecipeForm } from '@/components/recipe/RecipeForm';
-import type { Recipe } from '@/lib/types';
+import type { Recipe, KosherCategory } from '@/lib/types';
 import type { RecipeFormData } from '@/lib/schemas';
+import { KOSHER_CATEGORIES } from '@/lib/kosher';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,6 +32,7 @@ export default function HomePageClient() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorLoading, setErrorLoading] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [kosherFilter, setKosherFilter] = useState<KosherCategory | 'all'>('all');
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -304,15 +306,23 @@ export default function HomePageClient() {
 
 
   const filteredRecipes = useMemo(() => {
-    if (!searchTerm) {
-      return recipes;
-    }
     const lowercasedSearchTerm = searchTerm.toLowerCase();
-    return recipes.filter(recipe =>
-      recipe.title.toLowerCase().includes(lowercasedSearchTerm) ||
-      (recipe.cuisines && recipe.cuisines.some(tag => tag.toLowerCase().includes(lowercasedSearchTerm)))
-    );
-  }, [recipes, searchTerm]);
+    return recipes.filter(recipe => {
+      const matchesSearch =
+        !searchTerm ||
+        recipe.title.toLowerCase().includes(lowercasedSearchTerm) ||
+        (recipe.cuisines && recipe.cuisines.some(tag => tag.toLowerCase().includes(lowercasedSearchTerm)));
+      const matchesKosher = kosherFilter === 'all' || recipe.kosherCategory === kosherFilter;
+      return matchesSearch && matchesKosher;
+    });
+  }, [recipes, searchTerm, kosherFilter]);
+
+  const isFiltering = searchTerm.trim() !== '' || kosherFilter !== 'all';
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setKosherFilter('all');
+  };
 
   const currentYear = useMemo(() => (hasMounted ? new Date().getFullYear().toString() : '...'), [hasMounted]);
 
@@ -320,7 +330,7 @@ export default function HomePageClient() {
     <div className="min-h-screen flex flex-col bg-background">
       <Header onAddRecipeClick={handleOpenAddForm} onSuggestRecipeClick={handleOpenSuggestionDialog} />
       <main className="flex-grow container mx-auto px-4 py-8">
-        <div className="mb-6">
+        <div className="mb-6 space-y-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <Input
@@ -331,6 +341,28 @@ export default function HomePageClient() {
               className="w-full max-w-md pl-10 shadow-sm"
               aria-label="Search recipes by title or cuisine tags"
             />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm text-muted-foreground mr-1">Kosher:</span>
+            <Button
+              type="button"
+              size="sm"
+              variant={kosherFilter === 'all' ? 'default' : 'outline'}
+              onClick={() => setKosherFilter('all')}
+            >
+              All
+            </Button>
+            {KOSHER_CATEGORIES.map((cat) => (
+              <Button
+                key={cat.value}
+                type="button"
+                size="sm"
+                variant={kosherFilter === cat.value ? 'default' : 'outline'}
+                onClick={() => setKosherFilter(cat.value)}
+              >
+                {cat.label}
+              </Button>
+            ))}
           </div>
         </div>
 
@@ -362,15 +394,15 @@ export default function HomePageClient() {
             </Button>
           </div>
         )}
-        {!isLoading && !errorLoading && filteredRecipes.length === 0 && recipes.length > 0 && searchTerm && (
+        {!isLoading && !errorLoading && filteredRecipes.length === 0 && recipes.length > 0 && isFiltering && (
           <div className="flex flex-col items-center justify-center text-center py-20 bg-card rounded-lg shadow-md">
             <Search size={64} className="text-primary mb-6" strokeWidth={1.5} />
             <h2 className="text-3xl font-semibold text-foreground mb-3">No Recipes Found</h2>
             <p className="text-lg text-muted-foreground mb-8 max-w-md">
-              No recipes match your search term "{searchTerm}" for title or cuisine tags. Try a different search.
+              No recipes match your current filters. Try a different search or kosher filter.
             </p>
-            <Button onClick={() => setSearchTerm('')} size="lg" variant="outline">
-              Clear Search
+            <Button onClick={clearFilters} size="lg" variant="outline">
+              Clear Filters
             </Button>
           </div>
         )}

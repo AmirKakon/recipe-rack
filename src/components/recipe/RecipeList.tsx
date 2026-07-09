@@ -5,8 +5,9 @@ import type { Recipe } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Pencil, Trash2 } from 'lucide-react';
-import { useRouter } from 'next/navigation'; 
+import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
+import { KosherBadge } from '@/components/recipe/KosherBadge';
 
 interface RecipeListProps {
   recipes: Recipe[];
@@ -43,7 +44,10 @@ export function RecipeList({ recipes, onDeleteRecipe, onEditRecipe }: RecipeList
               onClick={() => handleRowClick(recipe.id)} 
             >
               <TableCell className="font-medium text-card-foreground py-3 align-middle">
-                <span className="hover:underline text-primary">{recipe.title}</span>
+                <div className="flex items-center gap-2">
+                  <span className="hover:underline text-primary">{recipe.title}</span>
+                  <KosherBadge category={recipe.kosherCategory} />
+                </div>
               </TableCell>
               <TableCell className="py-3 align-middle">
                 {recipe.cuisines && recipe.cuisines.length > 0 ? (

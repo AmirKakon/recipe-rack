@@ -5,6 +5,9 @@ export interface Ingredient {
   quantity: string;
 }
 
+// Kosher dietary classification. Meat and dairy may not be mixed; pareve is neutral.
+export type KosherCategory = 'meat' | 'dairy' | 'pareve';
+
 export interface Recipe {
   id: string;
   title: string;
@@ -15,5 +18,6 @@ export interface Recipe {
   prepTime?: string;
   cookTime?: string;
   servingSize?: string;
+  kosherCategory?: KosherCategory; // meat / dairy / pareve
 }
 
