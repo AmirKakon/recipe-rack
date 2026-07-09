@@ -139,28 +139,34 @@ export default function HomePageClient() {
 
 
   const handleSaveRecipe = async (recipeFormData: RecipeFormData, recipeIdToUpdate?: string) => {
-    setIsLoading(true); 
+    setIsLoading(true);
     try {
       let response;
       let successMessage = '';
 
-      const cuisineTagsArray = recipeFormData.cuisine 
-        ? recipeFormData.cuisine.split(',').map(tag => tag.trim()).filter(tag => tag) 
+      const cuisineTagsArray = recipeFormData.cuisine
+        ? recipeFormData.cuisine.split(',').map(tag => tag.trim()).filter(tag => tag)
         : [];
 
-      const payloadForBackend = {
-        ...recipeFormData,
+      // The recipe fields as they will be stored (and mirrored into local state).
+      const savedFields = {
+        title: recipeFormData.title,
         ingredients: recipeFormData.ingredients.map(ing => ({
           id: ing.id || crypto.randomUUID(),
           name: ing.name,
           quantity: ing.quantity,
         })),
+        instructions: recipeFormData.instructions,
         cuisines: cuisineTagsArray,
-        cuisine: undefined, 
         prepTime: recipeFormData.prepTime || '',
         cookTime: recipeFormData.cookTime || '',
         servingSize: recipeFormData.servingSize || '',
+        kosherCategory: recipeFormData.kosherCategory,
+        imageUrl: recipeFormData.imageUrl || '',
       };
+
+      const payloadForBackend = { ...savedFields, cuisine: undefined };
+      const createdAt = Date.now();
 
       if (recipeIdToUpdate) {
         response = await fetch(`${API_BASE_URL}/api/recipes/update/${recipeIdToUpdate}`, {
@@ -168,14 +174,14 @@ export default function HomePageClient() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payloadForBackend),
         });
-        successMessage = `"${payloadForBackend.title}" has been successfully updated.`;
+        successMessage = `"${savedFields.title}" has been successfully updated.`;
       } else {
         response = await fetch(`${API_BASE_URL}/api/recipes/create`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...payloadForBackend, createdAt: Date.now() }),
+          body: JSON.stringify({ ...payloadForBackend, createdAt }),
         });
-        successMessage = `"${payloadForBackend.title}" has been successfully added.`;
+        successMessage = `"${savedFields.title}" has been successfully added.`;
       }
 
       if (!response.ok) {
@@ -183,13 +189,21 @@ export default function HomePageClient() {
         throw new Error(errorData.message || `Failed to save recipe: ${response.statusText}`);
       }
 
-      await response.json(); 
+      const result = await response.json();
+
+      // Update local state from the result instead of refetching the whole list.
+      if (recipeIdToUpdate) {
+        setRecipes(prev => prev.map(r => (r.id === recipeIdToUpdate ? { ...r, ...savedFields, cuisine: undefined } : r)));
+      } else {
+        const newId = result?.id || crypto.randomUUID();
+        setRecipes(prev => [...prev, { id: newId, ...savedFields, cuisine: undefined, createdAt, isFavorite: false }]);
+      }
+
       toast({
         title: recipeIdToUpdate ? 'Recipe Updated!' : 'Recipe Added!',
         description: successMessage,
       });
-      await fetchRecipes(); 
-      handleCloseForm(); 
+      handleCloseForm();
     } catch (error) {
       console.error("Error saving recipe:", error);
       toast({
