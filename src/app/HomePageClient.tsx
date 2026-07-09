@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Header } from '@/components/layout/Header';
 import { RecipeList } from '@/components/recipe/RecipeList';
 import { RecipeForm } from '@/components/recipe/RecipeForm';
+import { ShoppingListDialog } from '@/components/recipe/ShoppingListDialog';
 import type { Recipe, KosherCategory } from '@/lib/types';
 import type { RecipeFormData } from '@/lib/schemas';
 import { KOSHER_CATEGORIES } from '@/lib/kosher';
@@ -46,6 +47,8 @@ export default function HomePageClient() {
   const [suggestionQuery, setSuggestionQuery] = useState('');
   const [suggestionResult, setSuggestionResult] = useState<SuggestRecipeBasedOnInputOutput | null>(null);
   const [isSuggestingForPage, setIsSuggestingForPage] = useState(false);
+
+  const [isShoppingListOpen, setIsShoppingListOpen] = useState(false);
 
 
   const processFetchedRecipe = (recipe: any): Recipe => {
@@ -400,7 +403,7 @@ export default function HomePageClient() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <Header onAddRecipeClick={handleOpenAddForm} onSuggestRecipeClick={handleOpenSuggestionDialog} />
+      <Header onAddRecipeClick={handleOpenAddForm} onSuggestRecipeClick={handleOpenSuggestionDialog} onShoppingListClick={() => setIsShoppingListOpen(true)} />
       <main className="flex-grow container mx-auto px-4 py-8">
         <div className="mb-6 space-y-3">
           <div className="relative">
@@ -558,6 +561,12 @@ export default function HomePageClient() {
         onSave={handleSaveRecipe}
         recipeToEdit={editingRecipe}
         isSaving={isLoading && isFormOpen}
+      />
+
+      <ShoppingListDialog
+        recipes={recipes}
+        open={isShoppingListOpen}
+        onOpenChange={setIsShoppingListOpen}
       />
 
       <Dialog open={isSuggestionDialogOpen} onOpenChange={setIsSuggestionDialogOpen}>

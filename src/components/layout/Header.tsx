@@ -2,14 +2,15 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Utensils, Lightbulb } from 'lucide-react';
+import { PlusCircle, Utensils, Lightbulb, ShoppingCart } from 'lucide-react';
 
 interface HeaderProps {
   onAddRecipeClick: () => void;
   onSuggestRecipeClick?: () => void;
+  onShoppingListClick?: () => void;
 }
 
-export function Header({ onAddRecipeClick, onSuggestRecipeClick }: HeaderProps) {
+export function Header({ onAddRecipeClick, onSuggestRecipeClick, onShoppingListClick }: HeaderProps) {
   return (
     <header className="py-4 px-4 md:px-8 border-b border-border sticky top-0 bg-background/80 backdrop-blur-md z-10">
       <div className="container mx-auto flex flex-col items-center gap-4 sm:flex-row sm:justify-between">
@@ -18,6 +19,12 @@ export function Header({ onAddRecipeClick, onSuggestRecipeClick }: HeaderProps) 
           <h1 className="text-3xl font-bold text-foreground">Recipe Rack</h1>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+          {onShoppingListClick && (
+            <Button onClick={onShoppingListClick} variant="outline" size="lg" className="w-full sm:w-auto">
+              <ShoppingCart className="mr-2 h-5 w-5" />
+              Shopping List
+            </Button>
+          )}
           {onSuggestRecipeClick && (
             <Button onClick={onSuggestRecipeClick} variant="yellow" size="lg" className="w-full sm:w-auto">
               <Lightbulb className="mr-2 h-5 w-5" />
