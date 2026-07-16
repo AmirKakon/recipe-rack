@@ -132,7 +132,7 @@ export function RecipeView({ recipe }: RecipeViewProps) {
         <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground mb-2 sm:mb-0">
           {recipe.title}
         </h1>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           <KosherBadge category={recipe.kosherCategory} className="text-sm px-3 py-1" />
           <Button variant="outline" size="sm" onClick={() => setSwapOpen(true)} className="print:hidden">
             <Replace className="mr-2 h-4 w-4" />
