@@ -68,3 +68,26 @@ Add to `claude_desktop_config.json`:
   self-signed-certificate error, point Node at your corporate root CA via
   `NODE_EXTRA_CA_CERTS=/path/to/corp-root-ca.pem` in the server's `env`
   (do **not** disable TLS verification).
+
+## Hosted HTTP endpoint (no local process needed)
+
+Besides this local stdio server, the backend now hosts an MCP server over
+**Streamable HTTP** at:
+
+```
+https://us-central1-recipe-rack-ighp8.cloudfunctions.net/app/mcp
+```
+
+It's stateless (serverless) and exposes the 8 data + meal-plan tools
+(`list_recipes`, `search_recipes`, `get_recipe`, `create_recipe`,
+`update_recipe`, `delete_recipe`, `get_meal_plan`, `set_meal_plan`).
+The AI tools (`suggest_recipes`, `classify_kosher`, `generate_shopping_list`)
+remain on this local stdio server since they need a Gemini key.
+
+Connect from any Streamable-HTTP MCP client:
+
+- **MCP Inspector / Postman:** transport `Streamable HTTP`, URL above.
+- **Claude Code:** `claude mcp add --transport http recipe-rack https://us-central1-recipe-rack-ighp8.cloudfunctions.net/app/mcp`
+- **Claude Desktop:** add it as a custom connector (URL above).
+
+Note: the endpoint is open (no auth), matching the existing REST API.
