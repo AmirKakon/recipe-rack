@@ -76,42 +76,79 @@ const fileToDataUri = (file: File): Promise<string> =>
 const RECIPE_API_BASE_URL = 'https://us-central1-recipe-rack-ighp8.cloudfunctions.net/app';
 
 // Downscales an image in-browser and returns base64 JPEG data (keeps uploads small).
-const resizeImageToBase64 = (
+const HEIC_HINT =
+  "Couldn't process this photo. If it's an iPhone HEIC photo, set Camera → Formats → “Most Compatible”, or pick a different image.";
+
+// Draws an image source (HTMLImageElement or ImageBitmap) into a downscaled
+// JPEG and returns its base64. Throws if the canvas produced no data.
+const drawToJpegBase64 = (
+  source: CanvasImageSource,
+  srcW: number,
+  srcH: number,
+  maxDim: number,
+  quality: number
+): string => {
+  let width = srcW;
+  let height = srcH;
+  if (width >= height && width > maxDim) {
+    height = Math.round((height * maxDim) / width);
+    width = maxDim;
+  } else if (height > maxDim) {
+    width = Math.round((width * maxDim) / height);
+    height = maxDim;
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = width || 1;
+  canvas.height = height || 1;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Image processing is not supported in this browser.');
+  ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+  const base64 = canvas.toDataURL('image/jpeg', quality).split(',')[1] ?? '';
+  if (!base64) throw new Error('empty-canvas');
+  return base64;
+};
+
+const resizeImageToBase64 = async (
   file: File,
   maxDim = 1280,
   quality = 0.82
-): Promise<{ base64: string; contentType: string }> =>
-  new Promise((resolve, reject) => {
+): Promise<{ base64: string; contentType: string }> => {
+  // Preferred path: createImageBitmap decodes HEIC + very large images far more
+  // reliably on iOS Safari and applies EXIF orientation (no sideways photos).
+  if (typeof createImageBitmap === 'function') {
+    try {
+      const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' } as ImageBitmapOptions);
+      try {
+        return { base64: drawToJpegBase64(bitmap, bitmap.width, bitmap.height, maxDim, quality), contentType: 'image/jpeg' };
+      } finally {
+        bitmap.close?.();
+      }
+    } catch {
+      /* fall through to the <img> path below */
+    }
+  }
+
+  // Fallback path: <img> + object URL.
+  return new Promise((resolve, reject) => {
     const objectUrl = URL.createObjectURL(file);
     const img = new window.Image(); // window.Image — not the next/image component
     img.onload = () => {
       URL.revokeObjectURL(objectUrl);
-      let { width, height } = img;
-      if (width >= height && width > maxDim) {
-        height = Math.round((height * maxDim) / width);
-        width = maxDim;
-      } else if (height > maxDim) {
-        width = Math.round((width * maxDim) / height);
-        height = maxDim;
+      try {
+        const w = img.naturalWidth || img.width;
+        const h = img.naturalHeight || img.height;
+        resolve({ base64: drawToJpegBase64(img, w, h, maxDim, quality), contentType: 'image/jpeg' });
+      } catch {
+        reject(new Error(HEIC_HINT));
       }
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        reject(new Error('Image processing is not supported in this browser.'));
-        return;
-      }
-      ctx.drawImage(img, 0, 0, width, height);
-      const dataUrl = canvas.toDataURL('image/jpeg', quality);
-      resolve({ base64: dataUrl.split(',')[1] ?? '', contentType: 'image/jpeg' });
     };
     img.onerror = () => {
       URL.revokeObjectURL(objectUrl);
-      reject(new Error('Could not read the selected image.'));
+      reject(new Error(HEIC_HINT));
     };
     img.src = objectUrl;
   });
+};
 
 export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: RecipeFormProps) {
   const form = useForm<RecipeFormData>({
