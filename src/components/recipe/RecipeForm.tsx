@@ -35,6 +35,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { KOSHER_CATEGORIES, detectKosherConflict } from '@/lib/kosher';
+import { safeUUID, isValidUrl } from '@/lib/utils';
 
 
 interface RecipeFormProps {
@@ -229,7 +230,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
         form.reset({
           title: recipeToEdit.title,
           ingredients: recipeToEdit.ingredients.map(ing => ({ 
-            id: ing.id || crypto.randomUUID(),
+            id: ing.id || safeUUID(),
             name: ing.name, 
             quantity: ing.quantity 
           })),
@@ -469,7 +470,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
     if (files.length === 0) return;
 
     files.forEach((file) => {
-      const id = crypto.randomUUID();
+      const id = safeUUID();
       // Add the file immediately; fill in the image preview asynchronously.
       setScanFiles((prev) => [...prev, { id, file, previewUrl: null }]);
       if (file.type.startsWith('image/')) {
@@ -491,8 +492,8 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
   const populateFormWithScannedData = (extractedData: ExtractRecipeFromImageOutput) => {
     form.reset({ 
       title: extractedData.title || '',
-      ingredients: (extractedData.ingredients && extractedData.ingredients.length > 0 ? extractedData.ingredients : [{ id: crypto.randomUUID(), name: '', quantity: '' }]).map(ing => ({
-        id: ing.id || crypto.randomUUID(), 
+      ingredients: (extractedData.ingredients && extractedData.ingredients.length > 0 ? extractedData.ingredients : [{ id: safeUUID(), name: '', quantity: '' }]).map(ing => ({
+        id: ing.id || safeUUID(), 
         name: ing.name || '',
         quantity: ing.quantity || '',
       })),
@@ -533,7 +534,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
         populateFormWithScannedData(extractedData);
 
       } else if (activeScanTab === "url") {
-        if (!scanUrl.trim() || !URL.canParse(scanUrl)) { // Basic URL validation
+        if (!scanUrl.trim() || !isValidUrl(scanUrl)) { // Basic URL validation
           toast({ title: 'Invalid URL', description: 'Please enter a valid URL to scan.', variant: 'destructive' });
           return;
         }
@@ -541,7 +542,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
         populateFormWithScannedData(extractedData);
 
       } else if (activeScanTab === "tiktok") {
-        if (!tiktokUrl.trim() || !URL.canParse(tiktokUrl)) {
+        if (!tiktokUrl.trim() || !isValidUrl(tiktokUrl)) {
           toast({ title: 'Invalid Link', description: 'Please paste a valid TikTok video link.', variant: 'destructive' });
           return;
         }
@@ -904,7 +905,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
                     type="button"
                     variant="outline" 
                     size="sm"
-                    onClick={() => appendIngredient({ id: crypto.randomUUID(), name: '', quantity: '' })}
+                    onClick={() => appendIngredient({ id: safeUUID(), name: '', quantity: '' })}
                     className="mt-2"
                     disabled={commonDisabledProps}
                   >

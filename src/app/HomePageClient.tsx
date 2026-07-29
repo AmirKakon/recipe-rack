@@ -12,6 +12,7 @@ import type { Recipe, KosherCategory } from '@/lib/types';
 import type { RecipeFormData } from '@/lib/schemas';
 import { KOSHER_CATEGORIES } from '@/lib/kosher';
 import { normalizeTags } from '@/lib/tags';
+import { safeUUID } from '@/lib/utils';
 import { SORT_OPTIONS, sortRecipes, type SortOption } from '@/lib/recipe-sort';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -158,7 +159,7 @@ export default function HomePageClient() {
       const savedFields = {
         title: recipeFormData.title,
         ingredients: recipeFormData.ingredients.map(ing => ({
-          id: ing.id || crypto.randomUUID(),
+          id: ing.id || safeUUID(),
           name: ing.name,
           quantity: ing.quantity,
         })),
@@ -201,7 +202,7 @@ export default function HomePageClient() {
       if (recipeIdToUpdate) {
         setRecipes(prev => prev.map(r => (r.id === recipeIdToUpdate ? { ...r, ...savedFields, cuisine: undefined } : r)));
       } else {
-        const newId = result?.id || crypto.randomUUID();
+        const newId = result?.id || safeUUID();
         setRecipes(prev => [...prev, { id: newId, ...savedFields, cuisine: undefined, createdAt, isFavorite: false }]);
       }
 
@@ -358,8 +359,8 @@ export default function HomePageClient() {
       id: '', 
       title: newRecipeData.title || 'Untitled Suggested Recipe',
       ingredients: newRecipeData.ingredients && newRecipeData.ingredients.length > 0
-        ? newRecipeData.ingredients.map(ing => ({ name: ing.name, quantity: ing.quantity, id: crypto.randomUUID() }))
-        : [{ name: '', quantity: '', id: crypto.randomUUID() }],
+        ? newRecipeData.ingredients.map(ing => ({ name: ing.name, quantity: ing.quantity, id: safeUUID() }))
+        : [{ name: '', quantity: '', id: safeUUID() }],
       instructions: newRecipeData.instructions && newRecipeData.instructions.length > 0
         ? newRecipeData.instructions
         : [''],
