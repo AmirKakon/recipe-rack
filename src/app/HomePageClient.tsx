@@ -21,7 +21,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle as RecipeSuggestionCardTitle } from '@/components/ui/card'; // Renamed CardTitle to avoid conflict
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CookingPot, ServerCrash, Search, Lightbulb, Loader2, RefreshCw, Star } from 'lucide-react';
+import { CookingPot, ServerCrash, Search, Lightbulb, Loader2, RefreshCw, Star, SlidersHorizontal } from 'lucide-react';
 import type { SuggestRecipeBasedOnInputOutput, SuggestedRecipeItem } from '@/ai/flows/suggest-recipe-based-on-input-flow';
 import { suggestRecipeBasedOnInput } from '@/ai/flows/suggest-recipe-based-on-input-flow';
 import { Badge } from '@/components/ui/badge';
@@ -43,6 +43,7 @@ export default function HomePageClient() {
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [shabbatOnly, setShabbatOnly] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>('title');
+  const [showFilters, setShowFilters] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -402,6 +403,13 @@ export default function HomePageClient() {
 
   const isFiltering = searchTerm.trim() !== '' || kosherFilter !== 'all' || selectedCuisine !== null || favoritesOnly || shabbatOnly;
 
+  // Count of active filters (excludes the always-visible search box and sort).
+  const activeFilterCount =
+    (kosherFilter !== 'all' ? 1 : 0) +
+    (selectedCuisine ? 1 : 0) +
+    (favoritesOnly ? 1 : 0) +
+    (shabbatOnly ? 1 : 0);
+
   const clearFilters = () => {
     setSearchTerm('');
     setKosherFilter('all');
@@ -422,93 +430,115 @@ export default function HomePageClient() {
       <main className="flex-grow container mx-auto px-4 py-8">
         <HolidayBanner onGetIdeas={handleHolidaySuggest} />
         <div className="mb-6 space-y-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="Search recipes by title or cuisine tags..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full max-w-md pl-10 shadow-sm"
-              aria-label="Search recipes by title or cuisine tags"
-            />
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm text-muted-foreground mr-1">Kosher:</span>
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Search recipes..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 shadow-sm"
+                aria-label="Search recipes by title or cuisine tags"
+              />
+            </div>
             <Button
               type="button"
-              size="sm"
-              variant={kosherFilter === 'all' ? 'default' : 'outline'}
-              onClick={() => setKosherFilter('all')}
+              variant={showFilters ? 'default' : 'outline'}
+              onClick={() => setShowFilters((v) => !v)}
+              aria-expanded={showFilters}
+              className="shrink-0"
             >
-              All
+              <SlidersHorizontal className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Filters</span>
+              {activeFilterCount > 0 && (
+                <span className="ml-1.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary px-1 text-xs font-semibold text-primary-foreground">
+                  {activeFilterCount}
+                </span>
+              )}
             </Button>
-            {KOSHER_CATEGORIES.map((cat) => (
-              <Button
-                key={cat.value}
-                type="button"
-                size="sm"
-                variant={kosherFilter === cat.value ? 'default' : 'outline'}
-                onClick={() => setKosherFilter(cat.value)}
-              >
-                {cat.label}
-              </Button>
-            ))}
           </div>
 
-          {allCuisines.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm text-muted-foreground mr-1">Cuisine:</span>
-              {allCuisines.map((tag) => (
-                <Badge
-                  key={tag}
-                  variant={selectedCuisine === tag ? 'default' : 'secondary'}
-                  className="cursor-pointer"
-                  onClick={() => handleToggleCuisineFilter(tag)}
+          {showFilters && (
+            <div className="space-y-3 rounded-lg border border-border bg-card/50 p-3 shadow-sm">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm text-muted-foreground mr-1 w-16 sm:w-auto">Kosher:</span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={kosherFilter === 'all' ? 'default' : 'outline'}
+                  onClick={() => setKosherFilter('all')}
                 >
-                  {tag}
-                </Badge>
-              ))}
+                  All
+                </Button>
+                {KOSHER_CATEGORIES.map((cat) => (
+                  <Button
+                    key={cat.value}
+                    type="button"
+                    size="sm"
+                    variant={kosherFilter === cat.value ? 'default' : 'outline'}
+                    onClick={() => setKosherFilter(cat.value)}
+                  >
+                    {cat.label}
+                  </Button>
+                ))}
+              </div>
+
+              {allCuisines.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm text-muted-foreground mr-1">Cuisine:</span>
+                  {allCuisines.map((tag) => (
+                    <Badge
+                      key={tag}
+                      variant={selectedCuisine === tag ? 'default' : 'secondary'}
+                      className="cursor-pointer"
+                      onClick={() => handleToggleCuisineFilter(tag)}
+                    >
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={favoritesOnly ? 'default' : 'outline'}
+                  onClick={() => setFavoritesOnly((v) => !v)}
+                >
+                  <Star className={`mr-1.5 h-4 w-4 ${favoritesOnly ? 'fill-current' : ''}`} />
+                  Favorites
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={shabbatOnly ? 'default' : 'outline'}
+                  onClick={() => setShabbatOnly((v) => !v)}
+                >
+                  🕯️ Shabbat
+                </Button>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Sort:</span>
+                  <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
+                    <SelectTrigger className="w-44 h-9 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SORT_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {isFiltering && (
+                  <Button type="button" size="sm" variant="ghost" onClick={clearFilters}>
+                    Clear filters
+                  </Button>
+                )}
+              </div>
             </div>
           )}
-
-          <div className="flex flex-wrap items-center gap-3">
-            <Button
-              type="button"
-              size="sm"
-              variant={favoritesOnly ? 'default' : 'outline'}
-              onClick={() => setFavoritesOnly((v) => !v)}
-            >
-              <Star className={`mr-1.5 h-4 w-4 ${favoritesOnly ? 'fill-current' : ''}`} />
-              Favorites
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={shabbatOnly ? 'default' : 'outline'}
-              onClick={() => setShabbatOnly((v) => !v)}
-            >
-              🕯️ Shabbat
-            </Button>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Sort:</span>
-              <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
-                <SelectTrigger className="w-44 h-9 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {SORT_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {isFiltering && (
-              <Button type="button" size="sm" variant="ghost" onClick={clearFilters}>
-                Clear filters
-              </Button>
-            )}
-          </div>
         </div>
 
         {isLoading && recipes.length === 0 && !errorLoading && (
