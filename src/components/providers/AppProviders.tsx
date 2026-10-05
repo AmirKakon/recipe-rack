@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { usePersistedRecipes } from '@/hooks/use-persisted-recipes';
 
 const HasInAppHistoryContext = createContext(false);
 
@@ -39,6 +40,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
       })
   );
   const hasInAppHistory = useTrackInAppNavigation();
+  usePersistedRecipes(queryClient);
 
   return (
     <QueryClientProvider client={queryClient}>
