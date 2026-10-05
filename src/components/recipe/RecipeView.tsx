@@ -16,9 +16,9 @@ import { useToast } from '@/hooks/use-toast';
 import { scaleQuantity, SCALE_FACTORS } from '@/lib/scale';
 import { detectKosherConflict } from '@/lib/kosher';
 import { estimateNutrition } from '@/ai/flows/estimate-nutrition-flow.ts';
+import { updateRecipe } from '@/lib/recipes-api';
+import { useRecipeCache } from '@/hooks/use-recipes';
 import { Clock, UtensilsIcon, Users, AlertTriangle, Replace, Loader2, Languages, Activity, PackageSearch } from 'lucide-react'; // Added icons
-
-const API_BASE_URL = 'https://us-central1-recipe-rack-ighp8.cloudfunctions.net/app';
 
 interface RecipeViewProps {
   recipe: Recipe;
@@ -38,6 +38,7 @@ export function RecipeView({ recipe }: RecipeViewProps) {
     : [];
 
   const { toast } = useToast();
+  const { upsertRecipe } = useRecipeCache();
   const [rating, setRating] = useState(recipe.rating ?? 0);
   const [notes, setNotes] = useState(recipe.notes ?? '');
   const [savingNotes, setSavingNotes] = useState(false);
@@ -45,33 +46,10 @@ export function RecipeView({ recipe }: RecipeViewProps) {
   const [nutrition, setNutrition] = useState(recipe.nutrition);
   const [estimatingNutrition, setEstimatingNutrition] = useState(false);
 
-  // Persist a partial change by re-sending the full recipe (the update endpoint
-  // validates title/ingredients/instructions and only changes provided fields).
   const persist = async (overrides: Partial<Recipe>) => {
-    const payload = {
-      title: recipe.title,
-      ingredients: recipe.ingredients || [],
-      instructions: instructionsArray,
-      cuisines: recipe.cuisines || [],
-      prepTime: recipe.prepTime || '',
-      cookTime: recipe.cookTime || '',
-      servingSize: recipe.servingSize || '',
-      kosherCategory: recipe.kosherCategory,
-      isFavorite: recipe.isFavorite,
-      createdAt: recipe.createdAt,
-      imageUrl: recipe.imageUrl,
-      rating,
-      notes,
-      nutrition,
-      ...overrides,
-    };
-    const res = await fetch(`${API_BASE_URL}/api/recipes/update/${recipe.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) throw new Error(`Update failed: ${res.statusText}`);
-    await res.json();
+    const updated = { ...recipe, instructions: instructionsArray, rating, notes, nutrition, ...overrides };
+    await updateRecipe(updated);
+    upsertRecipe(updated);
   };
 
   const handleRate = async (value: number) => {

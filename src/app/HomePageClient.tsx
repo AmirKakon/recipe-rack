@@ -11,10 +11,22 @@ import { HolidayBanner } from '@/components/recipe/HolidayBanner';
 import type { Recipe, KosherCategory } from '@/lib/types';
 import type { RecipeFormData } from '@/lib/schemas';
 import { KOSHER_CATEGORIES } from '@/lib/kosher';
-import { normalizeTags } from '@/lib/tags';
 import { safeUUID } from '@/lib/utils';
 import { SORT_OPTIONS, sortRecipes, type SortOption } from '@/lib/recipe-sort';
+import { deleteRecipe, updateRecipe } from '@/lib/recipes-api';
+import { useRecipeCache, useRecipes } from '@/hooks/use-recipes';
+import { useSaveRecipe } from '@/hooks/use-save-recipe';
 import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -26,26 +38,65 @@ import type { SuggestRecipeBasedOnInputOutput, SuggestedRecipeItem } from '@/ai/
 import { suggestRecipeBasedOnInput } from '@/ai/flows/suggest-recipe-based-on-input-flow';
 import { Badge } from '@/components/ui/badge';
 
-
-const API_BASE_URL = 'https://us-central1-recipe-rack-ighp8.cloudfunctions.net/app';
+const NO_RECIPES: Recipe[] = [];
+const SHOW_FILTERS_KEY = 'recipe-rack:show-filters';
 
 export default function HomePageClient() {
-  const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const { data: recipes = NO_RECIPES, isPending, error: recipesError, refetch: refetchRecipes, isRefetching } = useRecipes();
+  const { upsertRecipe, removeRecipe } = useRecipeCache();
+  const { saveRecipe, isSaving } = useSaveRecipe();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
+  const [recipePendingDelete, setRecipePendingDelete] = useState<Recipe | null>(null);
   const { toast } = useToast();
   const [hasMounted, setHasMounted] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorLoading, setErrorLoading] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [kosherFilter, setKosherFilter] = useState<KosherCategory | 'all'>('all');
-  const [selectedCuisine, setSelectedCuisine] = useState<string | null>(null);
-  const [favoritesOnly, setFavoritesOnly] = useState(false);
-  const [shabbatOnly, setShabbatOnly] = useState(false);
-  const [sortBy, setSortBy] = useState<SortOption>('title');
-  const [showFilters, setShowFilters] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
+  const errorLoading = recipes.length === 0 && recipesError ? recipesError.message : null;
+
+  // Filters live in the URL so Back/Forward and refresh restore exactly what the user was looking at.
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get('q') ?? '');
+  const kosherParam = searchParams.get('kosher');
+  const kosherFilter: KosherCategory | 'all' = KOSHER_CATEGORIES.some((c) => c.value === kosherParam)
+    ? (kosherParam as KosherCategory)
+    : 'all';
+  const selectedCuisine = searchParams.get('tag');
+  const favoritesOnly = searchParams.get('fav') === '1';
+  const shabbatOnly = searchParams.get('shabbat') === '1';
+  const sortParam = searchParams.get('sort');
+  const sortBy: SortOption = SORT_OPTIONS.some((o) => o.value === sortParam) ? (sortParam as SortOption) : 'title';
+  const [showFilters, setShowFilters] = useState(() => {
+    try {
+      return sessionStorage.getItem(SHOW_FILTERS_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleShowFilters = () => {
+    setShowFilters((open) => {
+      try {
+        sessionStorage.setItem(SHOW_FILTERS_KEY, open ? '0' : '1');
+      } catch {
+        // Storage can be unavailable (private mode); the panel just won't stay open across pages.
+      }
+      return !open;
+    });
+  };
+
+  const updateFilters = useCallback((changes: Record<string, string | null>) => {
+    const params = new URLSearchParams(window.location.search);
+    Object.entries(changes).forEach(([key, value]) => (value ? params.set(key, value) : params.delete(key)));
+    const query = params.toString();
+    window.history.replaceState(null, '', query ? `?${query}` : window.location.pathname);
+  }, []);
+
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+    updateFilters({ q: value || null });
+  };
+  const setKosherFilter = (value: KosherCategory | 'all') => updateFilters({ kosher: value === 'all' ? null : value });
+  const setSortBy = (value: SortOption) => updateFilters({ sort: value === 'title' ? null : value });
 
   // State for AI Recipe Suggestion
   const [isSuggestionDialogOpen, setIsSuggestionDialogOpen] = useState(false);
@@ -56,57 +107,9 @@ export default function HomePageClient() {
   const [isShoppingListOpen, setIsShoppingListOpen] = useState(false);
 
 
-  const processFetchedRecipe = (recipe: any): Recipe => {
-    let cuisinesArray: string[] = [];
-    if (recipe.cuisines && Array.isArray(recipe.cuisines)) {
-      cuisinesArray = recipe.cuisines;
-    } else if (typeof recipe.cuisine === 'string' && recipe.cuisine.trim() !== '') {
-      cuisinesArray = [recipe.cuisine.trim()];
-    }
-    
-    return {
-      ...recipe,
-      cuisines: cuisinesArray,
-      cuisine: undefined, 
-      prepTime: recipe.prepTime || undefined,
-      cookTime: recipe.cookTime || undefined,
-      servingSize: recipe.servingSize || undefined,
-    } as Recipe;
-  };
-  
-  const fetchRecipes = useCallback(async () => {
-    setIsLoading(true);
-    setErrorLoading(null);
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/recipes/getAll`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch recipes: ${response.statusText}`);
-      }
-      const result = await response.json();
-      if (result.status === "Success" && result.data && Array.isArray(result.data.recipes)) {
-        setRecipes(result.data.recipes.map(processFetchedRecipe));
-      } else {
-        console.warn("Fetched recipes data is not in the expected format:", result.data);
-        setRecipes([]);
-      }
-    } catch (error) {
-      console.error("Error fetching recipes:", error);
-      setErrorLoading(error instanceof Error ? error.message : "An unknown error occurred while fetching recipes.");
-      setRecipes([]);
-      toast({
-        title: 'Error Fetching Recipes',
-        description: error instanceof Error ? error.message : "Could not load recipes from the server.",
-        variant: 'destructive',
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [toast]);
-
   useEffect(() => {
     setHasMounted(true);
-    fetchRecipes();
-  }, [fetchRecipes]);
+  }, []);
 
   const handleOpenAddForm = () => {
     setEditingRecipe(null);
@@ -147,153 +150,45 @@ export default function HomePageClient() {
 
 
   const handleSaveRecipe = async (recipeFormData: RecipeFormData, recipeIdToUpdate?: string) => {
-    setIsLoading(true);
-    try {
-      let response;
-      let successMessage = '';
-
-      const cuisineTagsArray = normalizeTags(
-        recipeFormData.cuisine ? recipeFormData.cuisine.split(',') : []
-      );
-
-      // The recipe fields as they will be stored (and mirrored into local state).
-      const savedFields = {
-        title: recipeFormData.title,
-        ingredients: recipeFormData.ingredients.map(ing => ({
-          id: ing.id || safeUUID(),
-          name: ing.name,
-          quantity: ing.quantity,
-        })),
-        instructions: recipeFormData.instructions,
-        cuisines: cuisineTagsArray,
-        prepTime: recipeFormData.prepTime || '',
-        cookTime: recipeFormData.cookTime || '',
-        servingSize: recipeFormData.servingSize || '',
-        kosherCategory: recipeFormData.kosherCategory,
-        imageUrl: recipeFormData.imageUrl || '',
-      };
-
-      const payloadForBackend = { ...savedFields, cuisine: undefined };
-      const createdAt = Date.now();
-
-      if (recipeIdToUpdate) {
-        response = await fetch(`${API_BASE_URL}/api/recipes/update/${recipeIdToUpdate}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payloadForBackend),
-        });
-        successMessage = `"${savedFields.title}" has been successfully updated.`;
-      } else {
-        response = await fetch(`${API_BASE_URL}/api/recipes/create`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...payloadForBackend, createdAt }),
-        });
-        successMessage = `"${savedFields.title}" has been successfully added.`;
-      }
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Failed to save recipe and parse error.' }));
-        throw new Error(errorData.message || `Failed to save recipe: ${response.statusText}`);
-      }
-
-      const result = await response.json();
-
-      // Update local state from the result instead of refetching the whole list.
-      if (recipeIdToUpdate) {
-        setRecipes(prev => prev.map(r => (r.id === recipeIdToUpdate ? { ...r, ...savedFields, cuisine: undefined } : r)));
-      } else {
-        const newId = result?.id || safeUUID();
-        setRecipes(prev => [...prev, { id: newId, ...savedFields, cuisine: undefined, createdAt, isFavorite: false }]);
-      }
-
-      toast({
-        title: recipeIdToUpdate ? 'Recipe Updated!' : 'Recipe Added!',
-        description: successMessage,
-      });
-      handleCloseForm();
-    } catch (error) {
-      console.error("Error saving recipe:", error);
-      toast({
-        title: 'Save Error',
-        description: error instanceof Error ? error.message : "Could not save the recipe. Ensure all fields are correct.",
-        variant: 'destructive',
-      });
-    } finally {
-      setIsLoading(false);
-    }
+    const saved = await saveRecipe(recipeFormData, recipeIdToUpdate);
+    if (saved) handleCloseForm();
   };
 
-  const handleDeleteRecipe = async (recipeId: string) => {
-    const recipeToDelete = recipes.find(r => r.id === recipeId);
-    if (!recipeToDelete) return;
-
-    setIsLoading(true);
+  const handleConfirmDelete = async () => {
+    const recipe = recipePendingDelete;
+    if (!recipe) return;
+    setRecipePendingDelete(null);
+    removeRecipe(recipe.id);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/recipes/delete/${recipeId}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Failed to delete recipe and parse error.' }));
-        throw new Error(errorData.message || `Failed to delete recipe: ${response.statusText}`);
-      }
-      
-      await response.json();
-      toast({
-        title: 'Recipe Deleted',
-        description: `"${recipeToDelete.title}" has been removed.`,
-      });
-      await fetchRecipes();
+      await deleteRecipe(recipe.id);
+      toast({ title: 'Recipe Deleted', description: `"${recipe.title}" has been removed.` });
     } catch (error) {
-      console.error("Error deleting recipe:", error);
+      upsertRecipe(recipe);
       toast({
         title: 'Delete Error',
-        description: error instanceof Error ? error.message : "Could not delete the recipe.",
+        description: error instanceof Error ? error.message : 'Could not delete the recipe.',
         variant: 'destructive',
       });
-    } finally {
-      setIsLoading(false);
     }
   };
-  
+
   const handleToggleFavorite = useCallback(async (recipeId: string) => {
     const recipe = recipes.find(r => r.id === recipeId);
     if (!recipe) return;
 
-    const newValue = !recipe.isFavorite;
-    // Optimistic update.
-    setRecipes(prev => prev.map(r => (r.id === recipeId ? { ...r, isFavorite: newValue } : r)));
-
+    const updated = { ...recipe, isFavorite: !recipe.isFavorite };
+    upsertRecipe(updated);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/recipes/update/${recipeId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: recipe.title,
-          ingredients: recipe.ingredients,
-          instructions: recipe.instructions,
-          cuisines: recipe.cuisines || [],
-          prepTime: recipe.prepTime || '',
-          cookTime: recipe.cookTime || '',
-          servingSize: recipe.servingSize || '',
-          kosherCategory: recipe.kosherCategory,
-          createdAt: recipe.createdAt,
-          isFavorite: newValue,
-        }),
-      });
-      if (!response.ok) throw new Error(`Failed to update favorite: ${response.statusText}`);
-      await response.json();
+      await updateRecipe(updated);
     } catch (error) {
-      // Revert on failure.
-      setRecipes(prev => prev.map(r => (r.id === recipeId ? { ...r, isFavorite: !newValue } : r)));
+      upsertRecipe(recipe);
       toast({
         title: 'Could not update favorite',
         description: error instanceof Error ? error.message : 'Please try again.',
         variant: 'destructive',
       });
     }
-  }, [recipes, toast]);
+  }, [recipes, upsertRecipe, toast]);
 
   const handleCloseForm = () => {
     setIsFormOpen(false);
@@ -412,15 +307,12 @@ export default function HomePageClient() {
 
   const clearFilters = () => {
     setSearchTerm('');
-    setKosherFilter('all');
-    setSelectedCuisine(null);
-    setFavoritesOnly(false);
-    setShabbatOnly(false);
+    updateFilters({ q: null, kosher: null, tag: null, fav: null, shabbat: null });
   };
 
   const handleToggleCuisineFilter = useCallback((tag: string) => {
-    setSelectedCuisine(prev => (prev === tag ? null : tag));
-  }, []);
+    updateFilters({ tag: selectedCuisine === tag ? null : tag });
+  }, [selectedCuisine, updateFilters]);
 
   const currentYear = useMemo(() => (hasMounted ? new Date().getFullYear().toString() : '...'), [hasMounted]);
 
@@ -437,7 +329,7 @@ export default function HomePageClient() {
                 type="text"
                 placeholder="Search recipes..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => handleSearchChange(e.target.value)}
                 className="w-full pl-10 shadow-sm"
                 aria-label="Search recipes by title or cuisine tags"
               />
@@ -445,7 +337,7 @@ export default function HomePageClient() {
             <Button
               type="button"
               variant={showFilters ? 'default' : 'outline'}
-              onClick={() => setShowFilters((v) => !v)}
+              onClick={toggleShowFilters}
               aria-expanded={showFilters}
               className="shrink-0"
             >
@@ -505,7 +397,7 @@ export default function HomePageClient() {
                   type="button"
                   size="sm"
                   variant={favoritesOnly ? 'default' : 'outline'}
-                  onClick={() => setFavoritesOnly((v) => !v)}
+                  onClick={() => updateFilters({ fav: favoritesOnly ? null : '1' })}
                 >
                   <Star className={`mr-1.5 h-4 w-4 ${favoritesOnly ? 'fill-current' : ''}`} />
                   Favorites
@@ -514,7 +406,7 @@ export default function HomePageClient() {
                   type="button"
                   size="sm"
                   variant={shabbatOnly ? 'default' : 'outline'}
-                  onClick={() => setShabbatOnly((v) => !v)}
+                  onClick={() => updateFilters({ shabbat: shabbatOnly ? null : '1' })}
                 >
                   🕯️ Shabbat
                 </Button>
@@ -541,7 +433,7 @@ export default function HomePageClient() {
           )}
         </div>
 
-        {isLoading && recipes.length === 0 && !errorLoading && (
+        {isPending && !errorLoading && (
            <div className="space-y-4 py-4">
             {[1, 2, 3, 4, 5].map(i => (
               <div key={i} className="bg-card rounded-lg shadow-md p-4 animate-pulse">
@@ -557,19 +449,19 @@ export default function HomePageClient() {
             ))}
           </div>
         )}
-        {!isLoading && errorLoading && (
+        {errorLoading && (
           <div className="flex flex-col items-center justify-center text-center py-20 bg-card rounded-lg shadow-md">
             <ServerCrash size={64} className="text-destructive mb-6" strokeWidth={1.5} />
             <h2 className="text-3xl font-semibold text-destructive mb-3">Oops! Something went wrong.</h2>
             <p className="text-lg text-muted-foreground mb-8 max-w-md">
               {errorLoading}
             </p>
-            <Button onClick={fetchRecipes} size="lg" variant="outline">
+            <Button onClick={() => refetchRecipes()} size="lg" variant="outline" disabled={isRefetching}>
               Try Again
             </Button>
           </div>
         )}
-        {!isLoading && !errorLoading && filteredRecipes.length === 0 && recipes.length > 0 && isFiltering && (
+        {!isPending && !errorLoading && filteredRecipes.length === 0 && recipes.length > 0 && isFiltering && (
           <div className="flex flex-col items-center justify-center text-center py-20 bg-card rounded-lg shadow-md">
             <Search size={64} className="text-primary mb-6" strokeWidth={1.5} />
             <h2 className="text-3xl font-semibold text-foreground mb-3">No Recipes Found</h2>
@@ -581,7 +473,7 @@ export default function HomePageClient() {
             </Button>
           </div>
         )}
-        {!isLoading && !errorLoading && recipes.length === 0 && !searchTerm && (
+        {!isPending && !errorLoading && recipes.length === 0 && !searchTerm && (
           <div className="flex flex-col items-center justify-center text-center py-20 bg-card rounded-lg shadow-md">
             <CookingPot size={64} className="text-primary mb-6" strokeWidth={1.5} />
             <h2 className="text-3xl font-semibold text-foreground mb-3">Your Recipe Rack is Empty!</h2>
@@ -601,7 +493,7 @@ export default function HomePageClient() {
         {!errorLoading && filteredRecipes.length > 0 && (
           <RecipeList
             recipes={filteredRecipes}
-            onDeleteRecipe={handleDeleteRecipe}
+            onDeleteRecipe={(id) => setRecipePendingDelete(recipes.find((r) => r.id === id) ?? null)}
             onEditRecipe={handleOpenEditForm}
             onToggleFavorite={handleToggleFavorite}
             onCuisineClick={handleToggleCuisineFilter}
@@ -614,7 +506,7 @@ export default function HomePageClient() {
         onClose={handleCloseForm}
         onSave={handleSaveRecipe}
         recipeToEdit={editingRecipe}
-        isSaving={isLoading && isFormOpen}
+        isSaving={isSaving}
       />
 
       <ShoppingListDialog
@@ -622,6 +514,26 @@ export default function HomePageClient() {
         open={isShoppingListOpen}
         onOpenChange={setIsShoppingListOpen}
       />
+
+      <AlertDialog open={!!recipePendingDelete} onOpenChange={(open) => !open && setRecipePendingDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this recipe?</AlertDialogTitle>
+            <AlertDialogDescription>
+              &quot;{recipePendingDelete?.title}&quot; will be permanently removed from your rack.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={isSuggestionDialogOpen} onOpenChange={setIsSuggestionDialogOpen}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">

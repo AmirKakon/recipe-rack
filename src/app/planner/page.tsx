@@ -9,6 +9,8 @@ import { getWeekDays, getWeekLabel } from '@/lib/week';
 import { RecipePickerDialog } from '@/components/recipe/RecipePickerDialog';
 import { ShoppingListDialog } from '@/components/recipe/ShoppingListDialog';
 import { KosherBadge } from '@/components/recipe/KosherBadge';
+import { useRecipes } from '@/hooks/use-recipes';
+import { useHasInAppHistory } from '@/components/providers/AppProviders';
 import { ArrowLeft, ChevronLeft, ChevronRight, Loader2, Plus, ShoppingCart, X } from 'lucide-react';
 
 const API_BASE_URL = 'https://us-central1-recipe-rack-ighp8.cloudfunctions.net/app';
@@ -19,20 +21,17 @@ const MEAL_TYPES: { value: MealType; label: string }[] = [
   { value: 'dinner', label: 'Dinner' },
 ];
 
-const processFetchedRecipe = (r: any): Recipe => {
-  let cuisines: string[] = [];
-  if (Array.isArray(r.cuisines)) cuisines = r.cuisines;
-  else if (typeof r.cuisine === 'string' && r.cuisine.trim()) cuisines = [r.cuisine.trim()];
-  return { ...r, cuisines } as Recipe;
-};
+const NO_RECIPES: Recipe[] = [];
 
 export default function MealPlannerPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const hasInAppHistory = useHasInAppHistory();
 
-  const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const { data: recipes = NO_RECIPES, isPending: isLoadingRecipes } = useRecipes();
   const [entries, setEntries] = useState<MealPlanEntry[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingPlan, setIsLoadingPlan] = useState(true);
+  const isLoading = isLoadingRecipes || isLoadingPlan;
   const [weekOffset, setWeekOffset] = useState(0);
   const [picker, setPicker] = useState<{ date: string; mealType: MealType } | null>(null);
   const [shoppingOpen, setShoppingOpen] = useState(false);
@@ -42,21 +41,16 @@ export default function MealPlannerPage() {
 
   useEffect(() => {
     (async () => {
-      setIsLoading(true);
+      setIsLoadingPlan(true);
       try {
-        const [recipesRes, planRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/api/recipes/getAll`),
-          fetch(`${API_BASE_URL}/api/mealplan`),
-        ]);
-        const recipesJson = await recipesRes.json();
-        if (recipesJson?.data?.recipes) setRecipes(recipesJson.data.recipes.map(processFetchedRecipe));
+        const planRes = await fetch(`${API_BASE_URL}/api/mealplan`);
         const planJson = await planRes.json();
         if (Array.isArray(planJson?.data?.entries)) setEntries(planJson.data.entries);
       } catch (error) {
         console.error('Error loading planner:', error);
         toast({ title: 'Error loading planner', description: error instanceof Error ? error.message : 'Please try again.', variant: 'destructive' });
       } finally {
-        setIsLoading(false);
+        setIsLoadingPlan(false);
       }
     })();
   }, [toast]);
@@ -100,7 +94,7 @@ export default function MealPlannerPage() {
       <div className="container mx-auto px-4">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <Button variant="outline" onClick={() => router.push('/')}>
+            <Button variant="outline" onClick={() => (hasInAppHistory ? router.back() : router.push('/'))}>
               <ArrowLeft className="mr-2 h-4 w-4" /> Recipes
             </Button>
             <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Meal Planner</h1>
