@@ -8,6 +8,12 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  experimental: {
+    serverActions: {
+      // Recipe scans send photos/PDFs as base64 to a server action; the 1 MB default rejects them.
+      bodySizeLimit: '20mb',
+    },
+  },
   images: {
     remotePatterns: [
       {

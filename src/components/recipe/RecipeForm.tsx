@@ -114,6 +114,20 @@ const resizeImageToBase64 = (
     img.src = objectUrl;
   });
 
+// Full-resolution phone photos are several MB and exceed the server-action request limit,
+// so images are downscaled to a size that is still sharp enough for the AI to read.
+const SCAN_MAX_DIMENSION = 2000;
+
+const toScanDataUri = async (file: File): Promise<string> => {
+  if (!file.type.startsWith('image/')) return fileToDataUri(file);
+  try {
+    const { base64, contentType } = await resizeImageToBase64(file, SCAN_MAX_DIMENSION, 0.85);
+    return `data:${contentType};base64,${base64}`;
+  } catch {
+    return fileToDataUri(file);
+  }
+};
+
 export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: RecipeFormProps) {
   const form = useForm<RecipeFormData>({
     resolver: zodResolver(recipeFormSchema),
@@ -486,7 +500,7 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
 
         let fileDataUris: string[];
         try {
-          fileDataUris = await Promise.all(scanFiles.map((sf) => fileToDataUri(sf.file)));
+          fileDataUris = await Promise.all(scanFiles.map((sf) => toScanDataUri(sf.file)));
         } catch (readError) {
           console.error('Error reading files:', readError);
           toast({ title: 'File Read Error', description: 'Could not read one of the selected files.', variant: 'destructive' });
