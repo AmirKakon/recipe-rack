@@ -515,8 +515,12 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
           toast({ title: 'Invalid URL', description: 'Please enter a valid URL to scan.', variant: 'destructive' });
           return;
         }
-        const extractedData = await extractRecipeFromUrl({ recipeUrl: scanUrl });
-        populateFormWithScannedData(extractedData);
+        const result = await extractRecipeFromUrl({ recipeUrl: scanUrl });
+        if ('error' in result) {
+          toast({ title: 'Scanning Error', description: result.error, variant: 'destructive' });
+          return;
+        }
+        populateFormWithScannedData(result.recipe);
 
       } else if (activeScanTab === "tiktok") {
         if (!tiktokUrl.trim() || !isValidUrl(tiktokUrl)) {
