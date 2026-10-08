@@ -531,8 +531,12 @@ export function RecipeForm({ isOpen, onClose, onSave, recipeToEdit, isSaving }: 
           toast({ title: 'Not a TikTok Link', description: 'This does not look like a TikTok URL. Please paste a link from tiktok.com.', variant: 'destructive' });
           return;
         }
-        const extractedData = await extractRecipeFromTiktok({ videoUrl: tiktokUrl });
-        populateFormWithScannedData(extractedData);
+        const result = await extractRecipeFromTiktok({ videoUrl: tiktokUrl });
+        if ('error' in result) {
+          toast({ title: 'Scanning Error', description: result.error, variant: 'destructive' });
+          return;
+        }
+        populateFormWithScannedData(result.recipe);
       }
     } catch (aiError) {
       console.error('Error scanning recipe (AI processing):', aiError);

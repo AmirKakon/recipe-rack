@@ -9,7 +9,7 @@
  *
  * - extractRecipeFromTiktok - Extracts recipe details from a TikTok URL.
  * - ExtractRecipeFromTiktokInput - The input type.
- * - ExtractRecipeFromTiktokOutput - The return type (shares schema with image extraction).
+ * - ExtractRecipeFromTiktokResult - The extracted recipe, or a user-facing error message.
  */
 
 import {ai} from '@/ai/genkit';
@@ -21,7 +21,16 @@ const ExtractRecipeFromTiktokInputSchema = z.object({
 });
 export type ExtractRecipeFromTiktokInput = z.infer<typeof ExtractRecipeFromTiktokInputSchema>;
 
-export type ExtractRecipeFromTiktokOutput = ExtractRecipeFromImageOutput;
+// Errors are returned rather than thrown: Next.js replaces thrown server-action
+// messages with a generic one in production, hiding the actionable explanation.
+export type ExtractRecipeFromTiktokResult = { recipe: ExtractRecipeFromImageOutput } | { error: string };
+
+class TiktokCaptionError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'TiktokCaptionError';
+  }
+}
 
 const emptyResult: ExtractRecipeFromImageOutput = {
   title: '',
@@ -52,11 +61,11 @@ async function fetchTiktokCaption(videoUrl: string): Promise<{ caption: string; 
       headers: { Accept: 'application/json' },
     });
   } catch (cause) {
-    throw new Error('Could not reach TikTok to read this video. Please check the link and try again.', { cause });
+    throw new TiktokCaptionError('Could not reach TikTok to read this video. Please check the link and try again.', { cause });
   }
 
   if (!response.ok) {
-    throw new Error(
+    throw new TiktokCaptionError(
       `TikTok did not return this video's details (status ${response.status}). Make sure the link is a public TikTok video URL.`
     );
   }
@@ -65,7 +74,7 @@ async function fetchTiktokCaption(videoUrl: string): Promise<{ caption: string; 
   const caption = (data.title ?? '').trim();
 
   if (!caption) {
-    throw new Error(
+    throw new TiktokCaptionError(
       "This TikTok has no readable caption, so there's no recipe text to extract. Try a video whose caption contains the recipe."
     );
   }
@@ -75,8 +84,18 @@ async function fetchTiktokCaption(videoUrl: string): Promise<{ caption: string; 
 
 export async function extractRecipeFromTiktok(
   input: ExtractRecipeFromTiktokInput
-): Promise<ExtractRecipeFromTiktokOutput> {
-  return extractRecipeFromTiktokFlow(input);
+): Promise<ExtractRecipeFromTiktokResult> {
+  try {
+    const recipe = await extractRecipeFromTiktokFlow(input);
+    if (recipe.ingredients.length === 0 && recipe.instructions.length === 0) {
+      return { error: "Couldn't find a recipe in this TikTok's caption. Try a video whose caption lists the ingredients and steps." };
+    }
+    return { recipe };
+  } catch (error) {
+    if (error instanceof TiktokCaptionError) return { error: error.message };
+    console.error('Error extracting recipe from TikTok:', error);
+    return { error: 'Failed to extract the recipe from this TikTok. Please try again.' };
+  }
 }
 
 const prompt = ai.definePrompt({
