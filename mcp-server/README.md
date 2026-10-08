@@ -12,17 +12,18 @@ database or credentials required.
 
 | Tool | Description |
 |------|-------------|
-| `list_recipes` | List all recipes (id, title, kosher category, cuisines). |
-| `search_recipes` | Filter recipes by text query and/or kosher category. |
+| `list_recipes` | List all recipes (id, title, kosher category, cuisines, favorite). |
+| `search_recipes` | Filter recipes by text query, kosher category, and/or favorites only. |
 | `get_recipe` | Get one recipe with full details (incl. rating, notes, nutrition). |
-| `create_recipe` | Add a new recipe (cuisine tags auto-normalized to Title Case). |
-| `update_recipe` | Update an existing recipe (cuisine tags auto-normalized). |
+| `create_recipe` | Add a new recipe, incl. rating, notes, nutrition and favorite (cuisine tags auto-normalized to Title Case). |
+| `update_recipe` | **Partial** update: send only the fields to change (e.g. just `isFavorite: true` or a `rating`); everything else is kept. |
 | `delete_recipe` | Delete a recipe. |
 | `get_meal_plan` | Read the weekly meal plan (with recipe titles). |
 | `set_meal_plan` | Replace the weekly meal plan. |
 | `suggest_recipes` | AI: suggest up to 3 kosher-friendly recipes for a request. |
 | `classify_kosher` | AI: classify ingredients as meat / dairy / pareve. |
 | `generate_shopping_list` | AI: consolidated, aisle-grouped shopping list from recipe ids. |
+| `import_recipe_from_url` | AI: extract a recipe from a web page (prefers the page's schema.org recipe data) or a public TikTok link (from its caption). Returns it unsaved — save with `create_recipe`. |
 
 ## Setup
 
@@ -33,7 +34,7 @@ npm install
 
 - By default it targets the production API. Override with the
   `RECIPE_RACK_API_URL` environment variable if needed.
-- The **AI tools** (`suggest_recipes`, `classify_kosher`, `generate_shopping_list`)
+- The **AI tools** (`suggest_recipes`, `classify_kosher`, `generate_shopping_list`, `import_recipe_from_url`)
   require a `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) environment variable. The
   data tools work without it.
 
@@ -81,8 +82,9 @@ https://us-central1-recipe-rack-ighp8.cloudfunctions.net/app/mcp
 It's stateless (serverless) and exposes the 8 data + meal-plan tools
 (`list_recipes`, `search_recipes`, `get_recipe`, `create_recipe`,
 `update_recipe`, `delete_recipe`, `get_meal_plan`, `set_meal_plan`).
-The AI tools (`suggest_recipes`, `classify_kosher`, `generate_shopping_list`)
-remain on this local stdio server since they need a Gemini key.
+Recipe tools have the same fields and partial-update behaviour as the local server.
+The AI tools (`suggest_recipes`, `classify_kosher`, `generate_shopping_list`,
+`import_recipe_from_url`) remain on this local stdio server since they need a Gemini key.
 
 Connect from any Streamable-HTTP MCP client:
 

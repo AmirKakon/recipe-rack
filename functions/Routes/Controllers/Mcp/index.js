@@ -54,12 +54,31 @@ const loadSdk = () =>
 function buildServer(McpServer, z) {
   const server = new McpServer({ name: "recipe-rack", version: "1.0.0" });
   const ingredient = z.object({ name: z.string(), quantity: z.string().default("") });
+  const optionalRecipeFields = {
+    cuisines: z.array(z.string()).optional(),
+    kosherCategory: z.enum(["meat", "dairy", "pareve"]).optional(),
+    prepTime: z.string().optional(),
+    cookTime: z.string().optional(),
+    servingSize: z.string().optional(),
+    rating: z.number().min(1).max(5).optional(),
+    notes: z.string().optional(),
+    nutrition: z
+      .object({
+        calories: z.string().optional(),
+        protein: z.string().optional(),
+        carbs: z.string().optional(),
+        fat: z.string().optional(),
+      })
+      .optional(),
+    isFavorite: z.boolean().optional(),
+  };
 
   const summarize = (r) => ({
     id: r.id,
     title: r.title,
     kosherCategory: r.kosherCategory || null,
     cuisines: Array.isArray(r.cuisines) ? r.cuisines : [],
+    isFavorite: !!r.isFavorite,
   });
 
   server.registerTool(
@@ -74,20 +93,22 @@ function buildServer(McpServer, z) {
   server.registerTool(
     "search_recipes",
     {
-      description: "Search recipes by text query (title/cuisine) and/or kosher category.",
+      description: "Search recipes by text query (title/cuisine), kosher category, and/or favorites.",
       inputSchema: {
         query: z.string().optional(),
         kosherCategory: z.enum(["meat", "dairy", "pareve"]).optional(),
+        favoritesOnly: z.boolean().optional(),
       },
     },
-    async ({ query, kosherCategory }) => {
+    async ({ query, kosherCategory, favoritesOnly }) => {
       const { recipes } = await RecipeService.getAllRecipes();
       const q = (query || "").toLowerCase();
       const filtered = recipes.filter((r) => {
         const cuisines = Array.isArray(r.cuisines) ? r.cuisines : [];
         const matchesQuery = !q || r.title.toLowerCase().includes(q) || cuisines.some((t) => t.toLowerCase().includes(q));
         const matchesKosher = !kosherCategory || r.kosherCategory === kosherCategory;
-        return matchesQuery && matchesKosher;
+        const matchesFavorite = !favoritesOnly || !!r.isFavorite;
+        return matchesQuery && matchesKosher && matchesFavorite;
       });
       return textResult({ count: filtered.length, recipes: filtered.map(summarize) });
     }
@@ -107,17 +128,11 @@ function buildServer(McpServer, z) {
         title: z.string(),
         ingredients: z.array(ingredient).min(1),
         instructions: z.array(z.string()).min(1),
-        cuisines: z.array(z.string()).optional(),
-        kosherCategory: z.enum(["meat", "dairy", "pareve"]).optional(),
-        prepTime: z.string().optional(),
-        cookTime: z.string().optional(),
-        servingSize: z.string().optional(),
-        rating: z.number().min(1).max(5).optional(),
-        notes: z.string().optional(),
+        ...optionalRecipeFields,
       },
     },
     async (args) => {
-      const data = { ...args, cuisines: normalizeTags(args.cuisines || []), createdAt: Date.now() };
+      const data = { isFavorite: false, ...args, cuisines: normalizeTags(args.cuisines || []), createdAt: Date.now() };
       const { recipeId } = await RecipeService.createRecipe(data);
       return textResult({ created: true, id: recipeId });
     }
@@ -126,25 +141,23 @@ function buildServer(McpServer, z) {
   server.registerTool(
     "update_recipe",
     {
-      description: "Update a recipe (title, ingredients, instructions required). Cuisine tags normalized.",
+      description:
+        "Partially update a recipe: send only the fields to change (e.g. just isFavorite or rating); " +
+        "everything else is kept. Cuisine tags are normalized.",
       inputSchema: {
         id: z.string(),
-        title: z.string(),
-        ingredients: z.array(ingredient).min(1),
-        instructions: z.array(z.string()).min(1),
-        cuisines: z.array(z.string()).optional(),
-        kosherCategory: z.enum(["meat", "dairy", "pareve"]).optional(),
-        prepTime: z.string().optional(),
-        cookTime: z.string().optional(),
-        servingSize: z.string().optional(),
-        rating: z.number().min(1).max(5).optional(),
-        notes: z.string().optional(),
+        title: z.string().min(1).optional(),
+        ingredients: z.array(ingredient).min(1).optional(),
+        instructions: z.array(z.string()).min(1).optional(),
+        ...optionalRecipeFields,
       },
     },
     async ({ id, cuisines, ...fields }) => {
-      const data = { id, ...fields, ...(cuisines ? { cuisines: normalizeTags(cuisines) } : {}) };
-      const ok = await RecipeService.updateRecipe(data);
-      return textResult({ updated: ok, id });
+      const changes = { ...fields, ...(cuisines ? { cuisines: normalizeTags(cuisines) } : {}) };
+      if (Object.keys(changes).length === 0) throw new Error("No fields to update were provided.");
+      await RecipeService.getRecipe(id);
+      const ok = await RecipeService.updateRecipe({ id, ...changes });
+      return textResult({ updated: ok, id, changedFields: Object.keys(changes) });
     }
   );
 

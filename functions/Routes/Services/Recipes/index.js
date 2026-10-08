@@ -4,6 +4,13 @@ const { db, logger, STORAGE_BUCKET } = require("../../../setup");
 
 const recipesDB = "recipes";
 
+class NotFoundError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "NotFoundError";
+  }
+}
+
 // Upload a recipe image (base64) to Storage and return a public download URL.
 // Storage is resolved lazily (inside the handler) so module load stays fast.
 const uploadRecipeImage = async (base64Data, contentType) => {
@@ -112,4 +119,5 @@ module.exports = {
   updateRecipe,
   deleteRecipe,
   uploadRecipeImage,
+  NotFoundError,
 };

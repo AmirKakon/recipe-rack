@@ -45,6 +45,9 @@ app.get("/api/recipes/get/:id",  async (req, res) => {
 
     return res.status(200).send({ status: "Success", data: recipe });
   } catch (error) {
+    if (error instanceof RecipeService.NotFoundError) {
+      return res.status(404).send({ status: "Failed", msg: error.message });
+    }
     console.error("Error getting recipe:", error);
     res.status(500).send("Error getting recipe");
   }
